@@ -1,0 +1,368 @@
+---
+##
+# Production WordPress Deployment Example
+# This playbook demonstrates enterprise-grade WordPress deployment with cloud integration
+##
+
+- name: Deploy Enterprise WordPress with Cloud Integration
+  hosts: wordpress_production
+  become: true
+  gather_facts: true
+
+  # Use Ansible Vault for sensitive data
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core Configuration
+    # ========================================================================
+    wordpress_version: "6.4.2"  # Pin version for production
+    wordpress_install_dir: "/var/www/wordpress"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "Example Blog - Production"
+
+    # Admin credentials (use vault in production!)
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure Configuration
+    # ========================================================================
+    # Web Server: Nginx with HTTP/2
+    wordpress_web_server: "nginx"
+    wordpress_http_port: 80
+    wordpress_https_port: 443
+
+    # PHP Configuration
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+    wordpress_php_max_execution_time: "300"
+    wordpress_php_upload_max_filesize: "256M"
+    wordpress_php_post_max_size: "256M"
+
+    # ========================================================================
+    # Cloud Provider: Cloudflare + DigitalOcean
+    # ========================================================================
+    wordpress_cloud_provider: "cloudflare"
+
+    # Cloudflare Configuration
+    wordpress_cloudflare_enabled: true
+    wordpress_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
+    wordpress_cloudflare_zone_id: "{{ vault_cloudflare_zone_id }}"
+    wordpress_cloudflare_email: "cloudflare@example.com"
+
+    # Cloudflare DNS Records
+    wordpress_cloudflare_dns_records:
+      - name: "blog.example.com"
+        type: "A"
+        value: "{{ ansible_default_ipv4.address }}"
+        proxied: true
+        ttl: 1
+
+      - name: "www.blog.example.com"
+        type: "CNAME"
+        value: "blog.example.com"
+        proxied: true
+        ttl: 1
+
+    # Cloudflare CDN
+    wordpress_cloudflare_cdn_enabled: true
+    wordpress_cloudflare_cache_ttl: 14400  # 4 hours
+    wordpress_cloudflare_purge_on_update: true
+
+    # ========================================================================
+    # External Database: DigitalOcean Managed MySQL
+    # ========================================================================
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_external_db_host: "{{ vault_do_db_host }}"
+    wordpress_external_db_port: 25060
+    wordpress_external_db_name: "{{ vault_do_db_name }}"
+    wordpress_external_db_user: "{{ vault_do_db_user }}"
+    wordpress_external_db_password: "{{ vault_do_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+    wordpress_external_db_ssl_ca: "/etc/mysql/ssl/ca-certificate.crt"
+
+    # ========================================================================
+    # External Cache: DigitalOcean Managed Redis
+    # ========================================================================
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+    wordpress_do_redis_enabled: true
+    wordpress_do_redis_host: "{{ vault_do_redis_host }}"
+    wordpress_do_redis_port: 25061
+    wordpress_do_redis_password: "{{ vault_do_redis_password }}"
+
+    # Object cache settings
+    wordpress_enable_object_cache: true
+
+    # ========================================================================
+    # Object Storage: DigitalOcean Spaces
+    # ========================================================================
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "spaces"
+    wordpress_digitalocean_spaces_enabled: true
+    wordpress_digitalocean_spaces_key: "{{ vault_do_spaces_key }}"
+    wordpress_digitalocean_spaces_secret: "{{ vault_do_spaces_secret }}"
+    wordpress_digitalocean_spaces_bucket: "example-blog-uploads"
+    wordpress_digitalocean_spaces_region: "nyc3"
+    wordpress_digitalocean_cdn_enabled: true
+
+    # ========================================================================
+    # Email: SendGrid
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "sendgrid"
+    wordpress_smtp_host: "smtp.sendgrid.net"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "apikey"
+    wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_from_name: "{{ wordpress_site_title }}"
+    wordpress_smtp_encryption: "tls"
+
+    # ========================================================================
+    # SSL/TLS Configuration: Let's Encrypt
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+    wordpress_ssl_stapling: true
+    wordpress_force_ssl_admin: true
+
+    # ========================================================================
+    # WordPress Plugins
+    # ========================================================================
+    wordpress_plugins:
+      # Security
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+
+      - name: "all-in-one-wp-security-and-firewall"
+        version: "latest"
+        state: "present"
+
+      # Performance
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+
+      - name: "autoptimize"
+        version: "latest"
+        state: "present"
+
+      - name: "ewww-image-optimizer"
+        version: "latest"
+        state: "present"
+
+      # SEO
+      - name: "wordpress-seo"
+        version: "latest"
+        state: "present"
+
+      # Backups
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+
+      # Email
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+
+      # Cloud Integration
+      - name: "amazon-s3-and-cloudfront"
+        version: "latest"
+        state: "present"
+
+      # Forms
+      - name: "contact-form-7"
+        version: "latest"
+        state: "present"
+
+    # ========================================================================
+    # WordPress Themes
+    # ========================================================================
+    wordpress_themes:
+      - name: "astra"
+        version: "latest"
+        state: "present"
+        activate: true
+
+      - name: "generatepress"
+        version: "latest"
+        state: "present"
+        activate: false
+
+    # ========================================================================
+    # Security Configuration
+    # ========================================================================
+    # WordPress security
+    wordpress_disable_file_edit: true
+    wordpress_disable_file_mods: false
+    wordpress_disallow_unfiltered_html: true
+    wordpress_debug: false
+    wordpress_debug_log: true
+    wordpress_debug_display: false
+
+    # Fail2ban
+    wordpress_enable_fail2ban: true
+    wordpress_fail2ban_maxretry: 5
+    wordpress_fail2ban_findtime: "10m"
+    wordpress_fail2ban_bantime: "1h"
+
+    # Firewall
+    wordpress_configure_firewall: true
+    wordpress_allowed_ips:
+      - "192.168.1.0/24"  # Office network
+      - "10.0.0.0/8"      # Internal network
+
+    # ========================================================================
+    # Performance Optimization
+    # ========================================================================
+    # Opcache
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "256"
+    wordpress_opcache_max_files: "10000"
+    wordpress_opcache_validate_timestamps: "0"
+
+    # Image optimization
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+    wordpress_avif_enabled: true
+    wordpress_lazy_load_enabled: true
+
+    # HTTP/2
+    wordpress_http2_push_enabled: true
+    wordpress_http2_push_preload: true
+
+    # ========================================================================
+    # Backup Configuration
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+    wordpress_backup_schedule_hour: "2"
+    wordpress_backup_schedule_minute: "0"
+
+    # Backup to DigitalOcean Spaces
+    wordpress_backup_to_cloud: true
+    wordpress_backup_cloud_provider: "spaces"
+    wordpress_backup_cloud_bucket: "example-blog-backups"
+
+    # ========================================================================
+    # Monitoring and Logging
+    # ========================================================================
+    wordpress_enable_logging: true
+    wordpress_log_dir: "/var/log/wordpress"
+    wordpress_logrotate_enabled: true
+    wordpress_logrotate_frequency: "daily"
+    wordpress_logrotate_retention: 14
+
+    # ========================================================================
+    # WP-CLI
+    # ========================================================================
+    wordpress_install_wpcli: true
+    wordpress_wpcli_version: "latest"
+
+    # ========================================================================
+    # Cron Management
+    # ========================================================================
+    wordpress_disable_wp_cron: true
+    wordpress_system_cron_enabled: true
+    wordpress_cron_schedule: "*/15 * * * *"
+
+    # ========================================================================
+    # Additional WordPress Constants
+    # ========================================================================
+    wordpress_additional_constants:
+      CONCATENATE_SCRIPTS: false
+      COMPRESS_SCRIPTS: false
+      ENFORCE_GZIP: true
+      WP_POST_REVISIONS: 5
+      AUTOSAVE_INTERVAL: 300
+      EMPTY_TRASH_DAYS: 30
+
+  # Pre-tasks for environment verification
+  pre_tasks:
+    - name: Verify Ansible version
+      ansible.builtin.assert:
+        that:
+          - ansible_version.full is version('2.14', '>=')
+        fail_msg: "Ansible 2.14 or higher required"
+        success_msg: "Ansible version {{ ansible_version.full }} is supported"
+
+    - name: Verify OS compatibility
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution in ['Ubuntu', 'Debian', 'RedHat', 'CentOS', 'Rocky', 'AlmaLinux']
+        fail_msg: "Unsupported OS: {{ ansible_distribution }}"
+        success_msg: "OS {{ ansible_distribution }} {{ ansible_distribution_version }} is supported"
+
+    - name: Install required Python packages
+      ansible.builtin.pip:
+        name:
+          - pymysql
+          - cryptography
+        state: present
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise
+
+  # Post-deployment tasks
+  post_tasks:
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg:
+          - "WordPress deployed successfully!"
+          - "Site URL: {{ wordpress_site_url }}"
+          - "Admin User: {{ wordpress_admin_user }}"
+          - "Database: External ({{ wordpress_external_db_host }})"
+          - "Cache: External Redis ({{ wordpress_do_redis_host }})"
+          - "Object Storage: DigitalOcean Spaces"
+          - "CDN: Cloudflare"
+          - "Email: SendGrid"
+
+    - name: Verify WordPress installation
+      ansible.builtin.uri:
+        url: "{{ wordpress_site_url }}"
+        method: GET
+        status_code: 200
+        validate_certs: true
+      register: wp_health_check
+      failed_when: false
+
+    - name: WordPress health check result
+      ansible.builtin.debug:
+        msg: "WordPress is {{ 'healthy' if wp_health_check.status == 200 else 'not responding' }}"
+
+    - name: Send deployment notification (optional)
+      community.general.mail:
+        host: "{{ wordpress_smtp_host }}"
+        port: "{{ wordpress_smtp_port }}"
+        username: "{{ wordpress_smtp_user }}"
+        password: "{{ wordpress_smtp_password }}"
+        to: "{{ wordpress_admin_email }}"
+        subject: "WordPress Deployment Completed - {{ ansible_hostname }}"
+        body: |
+          WordPress has been successfully deployed on {{ ansible_hostname }}.
+
+          Details:
+          - Site URL: {{ wordpress_site_url }}
+          - Server: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - PHP Version: {{ wordpress_php_version }}
+          - Web Server: {{ wordpress_web_server }}
+          - Database: External Managed Database
+          - Cache: Redis (Managed)
+          - CDN: Cloudflare
+          - Deployment Time: {{ ansible_date_time.iso8601 }}
+
+          Please verify the installation at {{ wordpress_site_url }}/wp-admin
+
+          -- Automated Deployment System
+      when: wordpress_smtp_enabled | bool
+      ignore_errors: true

@@ -1,0 +1,319 @@
+---
+##
+# Multi-Cloud High Availability WordPress Deployment
+# Demonstrates HA setup across multiple regions/providers
+# Uses external services for database, cache, and storage
+##
+
+- name: Deploy High Availability Multi-Cloud WordPress
+  hosts: wordpress_ha_cluster
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core
+    # ========================================================================
+    wordpress_version: "6.4.2"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "Multi-Cloud HA WordPress"
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure
+    # ========================================================================
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+
+    # ========================================================================
+    # High Availability Configuration
+    # ========================================================================
+    wordpress_ha_enabled: true
+    wordpress_ha_load_balancer: "cloud_lb"
+
+    # Web server nodes across regions/providers
+    wordpress_ha_nodes:
+      - host: "web1-us-east.example.com"
+        ip: "10.0.1.10"
+        region: "us-east-1"
+        provider: "digitalocean"
+
+      - host: "web2-us-west.example.com"
+        ip: "10.0.2.10"
+        region: "us-west-1"
+        provider: "digitalocean"
+
+      - host: "web3-eu.example.com"
+        ip: "10.0.3.10"
+        region: "eu-central-1"
+        provider: "google"
+
+    # Session management for HA
+    wordpress_ha_session_storage: "redis"
+
+    # ========================================================================
+    # Cloudflare for Global Load Balancing & CDN
+    # ========================================================================
+    wordpress_cloud_provider: "cloudflare"
+    wordpress_cloudflare_enabled: true
+    wordpress_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
+    wordpress_cloudflare_zone_id: "{{ vault_cloudflare_zone_id }}"
+
+    # Cloudflare Load Balancer (geo-steering)
+    wordpress_cloudflare_dns_records:
+      - name: "blog.example.com"
+        type: "A"
+        value: "{{ load_balancer_ip }}"
+        proxied: true
+
+    wordpress_cloudflare_cdn_enabled: true
+    wordpress_cloudflare_cache_ttl: 14400
+
+    # ========================================================================
+    # External Database - Google Cloud SQL (Primary)
+    # ========================================================================
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_gcp_cloudsql_enabled: true
+    wordpress_external_db_type: "cloud_sql"
+    wordpress_external_db_host: "{{ vault_gcp_db_primary_ip }}"
+    wordpress_external_db_port: 3306
+    wordpress_external_db_name: "wordpress"
+    wordpress_external_db_user: "{{ vault_gcp_db_user }}"
+    wordpress_external_db_password: "{{ vault_gcp_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+
+    # Database replication (read replicas)
+    wordpress_db_read_replicas:
+      - host: "{{ vault_gcp_db_replica_us }}"
+        weight: 1
+      - host: "{{ vault_gcp_db_replica_eu }}"
+        weight: 1
+
+    # ========================================================================
+    # External Cache - Redis (Multi-region)
+    # ========================================================================
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+
+    # Primary Redis (GCP Memorystore)
+    wordpress_gcp_memorystore_enabled: true
+    wordpress_gcp_memorystore_host: "{{ vault_gcp_redis_primary }}"
+    wordpress_gcp_memorystore_port: 6379
+
+    # Redis Sentinel for failover
+    wordpress_redis_sentinel_enabled: true
+    wordpress_redis_sentinels:
+      - host: "{{ vault_redis_sentinel_1 }}"
+        port: 26379
+      - host: "{{ vault_redis_sentinel_2 }}"
+        port: 26379
+      - host: "{{ vault_redis_sentinel_3 }}"
+        port: 26379
+
+    wordpress_enable_object_cache: true
+
+    # ========================================================================
+    # Object Storage - Multi-Cloud Strategy
+    # ========================================================================
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "s3"  # S3-compatible
+
+    # Primary: DigitalOcean Spaces (cost-effective)
+    wordpress_digitalocean_spaces_enabled: true
+    wordpress_digitalocean_spaces_bucket: "wordpress-media-primary"
+    wordpress_digitalocean_spaces_region: "nyc3"
+
+    # Replication to Google Cloud Storage (disaster recovery)
+    wordpress_gcp_storage_enabled: true
+    wordpress_gcp_storage_bucket: "wordpress-media-backup"
+
+    # CDN in front of object storage
+    wordpress_cdn_enabled: true
+    wordpress_cdn_provider: "cloudflare"
+
+    # ========================================================================
+    # SSL/TLS
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+
+    # ========================================================================
+    # Email - Multi-provider Failover
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "sendgrid"
+    wordpress_smtp_host: "smtp.sendgrid.net"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "apikey"
+    wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_encryption: "tls"
+
+    # Failover to Amazon SES
+    wordpress_smtp_failover_enabled: true
+    wordpress_smtp_failover_provider: "ses"
+    wordpress_smtp_failover_host: "email-smtp.us-east-1.amazonaws.com"
+
+    # ========================================================================
+    # Performance Optimization (HA-specific)
+    # ========================================================================
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "512"  # More memory for HA nodes
+    wordpress_opcache_validate_timestamps: "0"
+
+    # Shared opcache across nodes (using Redis)
+    wordpress_opcache_interned_strings_buffer: "64"
+
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+    wordpress_avif_enabled: true
+
+    wordpress_http2_push_enabled: true
+
+    # ========================================================================
+    # Security (Multi-layered HA)
+    # ========================================================================
+    wordpress_enable_fail2ban: true
+    wordpress_configure_firewall: true
+    wordpress_disable_file_edit: true
+    wordpress_force_ssl_admin: true
+    wordpress_disallow_unfiltered_html: true
+
+    # IP whitelisting (internal network)
+    wordpress_allowed_ips:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+
+    # ========================================================================
+    # Backups (Multi-destination)
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+
+    # Backup to multiple locations
+    wordpress_backup_to_cloud: true
+    wordpress_backup_destinations:
+      - provider: "spaces"
+        bucket: "wordpress-backups-nyc"
+        region: "nyc3"
+      - provider: "gcs"
+        bucket: "wordpress-backups-eu"
+        region: "europe-west1"
+      - provider: "s3"
+        bucket: "wordpress-backups-us"
+        region: "us-east-1"
+
+    # ========================================================================
+    # Monitoring & Health Checks
+    # ========================================================================
+    wordpress_enable_logging: true
+    wordpress_log_dir: "/var/log/wordpress"
+    wordpress_logrotate_enabled: true
+
+    # Health check endpoints
+    wordpress_health_check_enabled: true
+    wordpress_health_check_path: "/health"
+
+    # Monitoring integrations
+    wordpress_monitoring_integrations:
+      - type: "cloudwatch"
+        enabled: true
+      - type: "stackdriver"
+        enabled: true
+      - type: "datadog"
+        enabled: false
+
+    # ========================================================================
+    # Plugins (HA-optimized)
+    # ========================================================================
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+
+      - name: "amazon-s3-and-cloudfront"
+        version: "latest"
+        state: "present"
+
+      - name: "wp-cloudflare-page-cache"
+        version: "latest"
+        state: "present"
+
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+
+      - name: "wordpress-seo"
+        version: "latest"
+        state: "present"
+
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+
+      - name: "query-monitor"  # Performance monitoring
+        version: "latest"
+        state: "present"
+
+      - name: "wp-crontrol"  # Cron management across nodes
+        version: "latest"
+        state: "present"
+
+    # ========================================================================
+    # Themes
+    # ========================================================================
+    wordpress_themes:
+      - name: "generatepress"
+        version: "latest"
+        state: "present"
+        activate: true
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise
+
+  post_tasks:
+    - name: Configure load balancer health checks
+      ansible.builtin.debug:
+        msg:
+          - "Configuring health checks for {{ inventory_hostname }}"
+          - "Health check endpoint: {{ wordpress_site_url }}/health"
+
+    - name: Verify node synchronization
+      ansible.builtin.uri:
+        url: "{{ wordpress_site_url }}/health"
+        method: GET
+        status_code: 200
+      register: health_check
+      failed_when: false
+
+    - name: Display HA deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Multi-Cloud High Availability Deployment ==="
+          - "Architecture: Active-Active Multi-Region"
+          - "Load Balancer: Cloudflare Global Load Balancer"
+          - "Web Nodes: {{ wordpress_ha_nodes | length }} across regions"
+          - "Database: Google Cloud SQL (Primary + Replicas)"
+          - "Cache: Redis with Sentinel (Multi-region)"
+          - "Storage: DigitalOcean Spaces (Primary) + GCS (Replica)"
+          - "CDN: Cloudflare Global Network"
+          - "Email: SendGrid (Primary) + SES (Failover)"
+          - "Backups: Multi-destination (Spaces + GCS + S3)"
+          - "Monitoring: CloudWatch + Stackdriver"
+          - "Site URL: {{ wordpress_site_url }}"
+          - "Estimated Uptime: 99.99%"

@@ -1,0 +1,195 @@
+---
+##
+# Ansible Vault Template
+# Copy this file and encrypt with: ansible-vault create vault.yml
+# Or encrypt existing: ansible-vault encrypt vault.yml
+# Edit encrypted: ansible-vault edit vault.yml
+##
+
+# ============================================================================
+# WordPress Credentials
+# ============================================================================
+vault_wp_admin_user: "admin"
+vault_wp_admin_password: "CHANGE-ME-STRONG-PASSWORD"
+vault_wp_db_password: "CHANGE-ME-DB-PASSWORD"
+
+# ============================================================================
+# Cloudflare
+# ============================================================================
+vault_cloudflare_api_token: "your-cloudflare-api-token"
+vault_cloudflare_zone_id: "your-cloudflare-zone-id"
+vault_cloudflare_email: "your-email@example.com"
+
+# ============================================================================
+# DigitalOcean
+# ============================================================================
+vault_do_token: "your-digitalocean-api-token"
+
+# Managed Database
+vault_do_db_host: "your-db-cluster.db.ondigitalocean.com"
+vault_do_db_port: 25060
+vault_do_db_name: "wordpress"
+vault_do_db_user: "doadmin"
+vault_do_db_password: "your-db-password"
+
+# Managed Redis
+vault_do_redis_host: "your-redis-cluster.db.ondigitalocean.com"
+vault_do_redis_port: 25061
+vault_do_redis_password: "your-redis-password"
+
+# Spaces (Object Storage)
+vault_do_spaces_key: "your-spaces-access-key"
+vault_do_spaces_secret: "your-spaces-secret-key"
+vault_do_spaces_bucket: "your-bucket-name"
+
+# ============================================================================
+# Google Cloud Platform
+# ============================================================================
+vault_gcp_project_id: "your-gcp-project-id"
+vault_gcp_service_account_key: |
+  {
+    "type": "service_account",
+    "project_id": "your-project",
+    "private_key_id": "key-id",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    "client_email": "service-account@project.iam.gserviceaccount.com",
+    "client_id": "123456789",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token"
+  }
+
+# Cloud SQL
+vault_gcp_cloudsql_instance: "your-instance-name"
+vault_gcp_db_primary_ip: "10.0.0.3"
+vault_gcp_db_replica_us: "10.0.0.4"
+vault_gcp_db_replica_eu: "10.0.0.5"
+vault_gcp_db_user: "wordpress"
+vault_gcp_db_password: "your-cloudsql-password"
+
+# Memorystore (Redis)
+vault_gcp_memorystore_instance: "your-redis-instance"
+vault_gcp_redis_primary: "10.0.0.6"
+
+# Cloud Storage
+vault_gcp_storage_bucket: "your-gcs-bucket"
+
+# ============================================================================
+# Microsoft Azure
+# ============================================================================
+vault_azure_subscription_id: "your-subscription-id"
+vault_azure_resource_group: "wordpress-rg"
+
+# Azure Database for MySQL
+vault_azure_db_server: "your-mysql-server"
+vault_azure_db_user: "wordpressuser"
+vault_azure_db_password: "your-azure-db-password"
+
+# Azure Cache for Redis
+vault_azure_redis_name: "your-redis-cache"
+vault_azure_redis_hostname: "your-redis-cache.redis.cache.windows.net"
+vault_azure_redis_password: "your-redis-password"
+
+# Azure Blob Storage
+vault_azure_storage_account: "yourstorageaccount"
+vault_azure_storage_key: "your-storage-account-key"
+vault_azure_storage_container: "wordpress-uploads"
+
+# ============================================================================
+# Oracle Cloud Infrastructure
+# ============================================================================
+vault_oci_tenancy: "ocid1.tenancy.oc1..your-tenancy"
+vault_oci_user: "ocid1.user.oc1..your-user"
+vault_oci_fingerprint: "your:key:fingerprint"
+vault_oci_region: "us-ashburn-1"
+vault_oci_namespace: "your-namespace"
+
+# OCI Database
+vault_oci_db_host: "your-db.oraclecloud.com"
+vault_oci_db_user: "ADMIN"
+vault_oci_db_password: "your-oci-db-password"
+
+# OCI Object Storage
+vault_oci_bucket_name: "wordpress-media"
+
+# ============================================================================
+# AWS (Compatible)
+# ============================================================================
+vault_aws_access_key: "your-aws-access-key"
+vault_aws_secret_key: "your-aws-secret-key"
+vault_aws_region: "us-east-1"
+
+# RDS/Aurora
+vault_aws_rds_endpoint: "your-rds-instance.region.rds.amazonaws.com"
+vault_aws_db_user: "admin"
+vault_aws_db_password: "your-rds-password"
+
+# ElastiCache
+vault_elasticache_endpoint: "your-elasticache.cache.amazonaws.com"
+
+# S3
+vault_s3_bucket: "your-s3-bucket"
+
+# CloudFront
+vault_cloudfront_domain: "your-distribution.cloudfront.net"
+vault_cloudfront_distribution_id: "your-distribution-id"
+
+# SES (Email)
+vault_aws_smtp_user: "your-ses-smtp-username"
+vault_aws_smtp_password: "your-ses-smtp-password"
+
+# ============================================================================
+# Email Services
+# ============================================================================
+
+# SendGrid
+vault_sendgrid_api_key: "SG.your-sendgrid-api-key"
+
+# Mailgun
+vault_mailgun_domain: "mg.example.com"
+vault_mailgun_api_key: "your-mailgun-api-key"
+vault_mailgun_smtp_user: "postmaster@mg.example.com"
+vault_mailgun_smtp_password: "your-mailgun-smtp-password"
+
+# Postmark
+vault_postmark_api_key: "your-postmark-api-key"
+vault_postmark_server_token: "your-server-token"
+
+# ============================================================================
+# SSL/TLS Certificates (if using custom certs)
+# ============================================================================
+vault_ssl_certificate: |
+  -----BEGIN CERTIFICATE-----
+  your-certificate-here
+  -----END CERTIFICATE-----
+
+vault_ssl_certificate_key: |
+  -----BEGIN PRIVATE KEY-----
+  your-private-key-here
+  -----END PRIVATE KEY-----
+
+vault_ssl_ca_bundle: |
+  -----BEGIN CERTIFICATE-----
+  your-ca-bundle-here
+  -----END CERTIFICATE-----
+
+# ============================================================================
+# Additional Secrets
+# ============================================================================
+vault_backup_encryption_key: "your-backup-encryption-key"
+vault_monitoring_api_key: "your-monitoring-api-key"
+vault_cdn_api_key: "your-cdn-api-key"
+
+# ============================================================================
+# Environment-Specific
+# ============================================================================
+# Production
+vault_prod_db_password: "production-db-password"
+vault_prod_redis_password: "production-redis-password"
+
+# Staging
+vault_staging_db_password: "staging-db-password"
+vault_staging_redis_password: "staging-redis-password"
+
+# Development
+vault_dev_db_password: "dev-db-password"
+vault_dev_redis_password: "dev-redis-password"

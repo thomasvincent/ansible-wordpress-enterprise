@@ -1,0 +1,90 @@
+---
+# Database installation and configuration for WordPress
+
+- name: Install database packages
+  ansible.builtin.package:
+    name: "{{ wordpress_db_packages[wordpress_db_engine] }}"
+    state: present
+  retries: 3
+  delay: 5
+
+- name: Start and enable database service
+  ansible.builtin.service:
+    name: "{{ wordpress_db_service[wordpress_db_engine] }}"
+    state: started
+    enabled: true
+
+- name: Secure MySQL/MariaDB installation
+  block:
+    - name: Set root password
+      community.mysql.mysql_user:
+        name: root
+        password: "{{ wordpress_db_root_password }}"
+        login_unix_socket: "{{ '/var/lib/mysql/mysql.sock' if ansible_os_family == 'RedHat' else '/var/run/mysqld/mysqld.sock' }}"
+        state: present
+      no_log: true
+
+    - name: Create .my.cnf for root
+      ansible.builtin.template:
+        src: my.cnf.j2
+        dest: /root/.my.cnf
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Remove anonymous users
+      community.mysql.mysql_user:
+        name: ""
+        host_all: true
+        state: absent
+
+    - name: Remove test database
+      community.mysql.mysql_db:
+        name: test
+        state: absent
+
+- name: Create WordPress database
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    encoding: "{{ wordpress_db_charset }}"
+    collation: "{{ wordpress_db_collate }}"
+    state: present
+
+- name: Create WordPress database user
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    host: "{{ item }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+  loop:
+    - localhost
+    - "{{ wordpress_db_host }}"
+  when: wordpress_db_host != "localhost"
+  no_log: true
+
+- name: Create WordPress database user (localhost only)
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    host: localhost
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    state: present
+  when: wordpress_db_host == "localhost"
+  no_log: true
+
+- name: Configure MySQL/MariaDB for WordPress
+  ansible.builtin.template:
+    src: mysql_wordpress.cnf.j2
+    dest: "{{ '/etc/my.cnf.d/wordpress.cnf' if ansible_os_family == 'RedHat' else '/etc/mysql/conf.d/wordpress.cnf' }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart mysql
+    - Restart mariadb
+
+- name: Flush privileges
+  community.mysql.mysql_query:
+    query: FLUSH PRIVILEGES
+  changed_when: false

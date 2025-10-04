@@ -1,0 +1,99 @@
+---
+# WordPress theme management
+
+- name: Manage WordPress themes using WP-CLI
+  when: wordpress_install_wpcli | bool
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  block:
+    - name: Install WordPress themes
+      ansible.builtin.command:
+        cmd: >
+          wp theme install {{ item.name }}
+          {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
+          {% if item.activate | default(false) %}--activate{% endif %}
+          --path={{ wordpress_install_dir }}
+      args:
+        creates: "{{ wordpress_install_dir }}/wp-content/themes/{{ item.name }}"
+      loop: "{{ wordpress_themes }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.state == "present"
+
+    - name: Install custom themes from URL
+      when: wordpress_custom_themes | length > 0
+      block:
+        - name: Download custom themes
+          ansible.builtin.get_url:
+            url: "{{ item.source }}"
+            dest: "/tmp/{{ item.name }}-theme.zip"
+            mode: "0644"
+          loop: "{{ wordpress_custom_themes }}"
+          loop_control:
+            label: "{{ item.name }}"
+          when:
+            - item.source is defined
+            - item.state == "present"
+
+        - name: Install custom themes via WP-CLI
+          ansible.builtin.command:
+            cmd: >
+              wp theme install /tmp/{{ item.name }}-theme.zip
+              {% if item.activate | default(false) %}--activate{% endif %}
+              --path={{ wordpress_install_dir }}
+          args:
+            creates: "{{ wordpress_install_dir }}/wp-content/themes/{{ item.name }}"
+          loop: "{{ wordpress_custom_themes }}"
+          loop_control:
+            label: "{{ item.name }}"
+          when:
+            - item.source is defined
+            - item.state == "present"
+
+        - name: Clean up theme archives
+          ansible.builtin.file:
+            path: "/tmp/{{ item.name }}-theme.zip"
+            state: absent
+          loop: "{{ wordpress_custom_themes }}"
+          loop_control:
+            label: "{{ item.name }}"
+
+    - name: Activate selected theme
+      ansible.builtin.command:
+        cmd: "wp theme activate {{ item.name }} --path={{ wordpress_install_dir }}"
+      loop: "{{ wordpress_themes + wordpress_custom_themes }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - item.activate | default(false)
+        - item.state == "present"
+      changed_when: false
+
+    - name: Update all themes
+      ansible.builtin.command:
+        cmd: "wp theme update --all --path={{ wordpress_install_dir }}"
+      changed_when: false
+      when: wordpress_version == "latest"
+
+    - name: List installed themes
+      ansible.builtin.command:
+        cmd: "wp theme list --path={{ wordpress_install_dir }} --format=table"
+      changed_when: false
+      register: theme_list
+
+    - name: Display installed themes
+      ansible.builtin.debug:
+        msg: "{{ theme_list.stdout_lines }}"
+
+    - name: Remove unused default themes (optional)
+      ansible.builtin.command:
+        cmd: "wp theme delete {{ item }} --path={{ wordpress_install_dir }}"
+      loop:
+        - twentytwenty
+        - twentytwentyone
+        - twentytwentytwo
+        - twentytwentythree
+      when:
+        - item not in (wordpress_themes + wordpress_custom_themes) | map(attribute='name') | list
+      failed_when: false
+      changed_when: false

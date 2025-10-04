@@ -1,0 +1,201 @@
+---
+##
+# AWS-Compatible WordPress Deployment
+# Uses AWS RDS, ElastiCache, S3, and CloudFront
+# This example shows AWS-compatible configuration
+##
+
+- name: Deploy WordPress on AWS Infrastructure
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core
+    # ========================================================================
+    wordpress_version: "6.4.2"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "AWS-Powered WordPress"
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure
+    # ========================================================================
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+    wordpress_php_upload_max_filesize: "256M"
+
+    # ========================================================================
+    # AWS RDS (Managed MySQL/Aurora)
+    # ========================================================================
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_aws_rds_enabled: true
+    wordpress_aws_region: "us-east-1"
+    wordpress_aws_access_key: "{{ vault_aws_access_key }}"
+    wordpress_aws_secret_key: "{{ vault_aws_secret_key }}"
+
+    wordpress_external_db_type: "aurora"
+    wordpress_external_db_host: "{{ vault_aws_rds_endpoint }}"
+    wordpress_external_db_port: 3306
+    wordpress_external_db_name: "wordpress"
+    wordpress_external_db_user: "{{ vault_aws_db_user }}"
+    wordpress_external_db_password: "{{ vault_aws_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+    wordpress_external_db_ssl_ca: "/etc/ssl/certs/rds-ca-2019-root.pem"
+
+    # ========================================================================
+    # AWS ElastiCache (Managed Redis)
+    # ========================================================================
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+    wordpress_elasticache_enabled: true
+    wordpress_elasticache_endpoint: "{{ vault_elasticache_endpoint }}"
+    wordpress_elasticache_port: 6379
+    wordpress_elasticache_cluster_mode: false
+    wordpress_enable_object_cache: true
+
+    # ========================================================================
+    # AWS S3 for Media Storage
+    # ========================================================================
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "s3"
+    wordpress_s3_enabled: true
+    wordpress_s3_bucket: "{{ vault_s3_bucket }}"
+    wordpress_s3_region: "us-east-1"
+    wordpress_s3_access_key: "{{ vault_aws_access_key }}"
+    wordpress_s3_secret_key: "{{ vault_aws_secret_key }}"
+    wordpress_object_storage_bucket: "{{ vault_s3_bucket }}"
+    wordpress_object_storage_path_prefix: "wp-content/uploads"
+
+    # AWS CloudFront CDN
+    wordpress_s3_cloudfront_enabled: true
+    wordpress_s3_cloudfront_domain: "{{ vault_cloudfront_domain }}"
+    wordpress_cloudfront_enabled: true
+    wordpress_cloudfront_distribution_id: "{{ vault_cloudfront_distribution_id }}"
+    wordpress_cdn_enabled: true
+    wordpress_cdn_provider: "cloudfront"
+    wordpress_cdn_domain: "{{ vault_cloudfront_domain }}"
+
+    # ========================================================================
+    # SSL/TLS (AWS Certificate Manager)
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+
+    # ========================================================================
+    # Email - Amazon SES
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "ses"
+    wordpress_smtp_host: "email-smtp.us-east-1.amazonaws.com"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "{{ vault_aws_smtp_user }}"
+    wordpress_smtp_password: "{{ vault_aws_smtp_password }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_encryption: "tls"
+
+    wordpress_ses_region: "us-east-1"
+    wordpress_ses_access_key: "{{ vault_aws_access_key }}"
+    wordpress_ses_secret_key: "{{ vault_aws_secret_key }}"
+
+    # ========================================================================
+    # Performance Optimization
+    # ========================================================================
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "256"
+    wordpress_opcache_validate_timestamps: "0"
+
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+    wordpress_avif_enabled: true
+    wordpress_lazy_load_enabled: true
+
+    wordpress_http2_push_enabled: true
+    wordpress_http2_push_preload: true
+
+    # ========================================================================
+    # Security
+    # ========================================================================
+    wordpress_enable_fail2ban: true
+    wordpress_configure_firewall: true
+    wordpress_disable_file_edit: true
+    wordpress_force_ssl_admin: true
+    wordpress_disallow_unfiltered_html: true
+
+    # AWS Security Groups
+    wordpress_allowed_ips:
+      - "10.0.0.0/8"   # VPC network
+      - "172.16.0.0/12" # VPC network
+
+    # ========================================================================
+    # Backups to S3
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+    wordpress_backup_to_cloud: true
+    wordpress_backup_cloud_provider: "s3"
+    wordpress_backup_cloud_bucket: "wordpress-backups-{{ vault_s3_bucket }}"
+
+    # ========================================================================
+    # Monitoring (CloudWatch compatible)
+    # ========================================================================
+    wordpress_enable_logging: true
+    wordpress_log_dir: "/var/log/wordpress"
+    wordpress_logrotate_enabled: true
+    wordpress_logrotate_frequency: "daily"
+    wordpress_logrotate_retention: 14
+
+    # ========================================================================
+    # Plugins
+    # ========================================================================
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+      - name: "amazon-s3-and-cloudfront"  # Offload Media to S3
+        version: "latest"
+        state: "present"
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+      - name: "wordpress-seo"
+        version: "latest"
+        state: "present"
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+      - name: "autoptimize"
+        version: "latest"
+        state: "present"
+      - name: "ewww-image-optimizer"
+        version: "latest"
+        state: "present"
+      - name: "wp-cloudflare-page-cache"  # If using Cloudflare in front
+        version: "latest"
+        state: "present"
+
+    # ========================================================================
+    # Themes
+    # ========================================================================
+    wordpress_themes:
+      - name: "generatepress"
+        version: "latest"
+        state: "present"
+        activate: true
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise

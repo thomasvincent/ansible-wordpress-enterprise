@@ -1,0 +1,130 @@
+---
+# WordPress core installation
+
+- name: Install WP-CLI
+  when: wordpress_install_wpcli | bool
+  block:
+    - name: Download WP-CLI
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
+        dest: /usr/local/bin/wp
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Verify WP-CLI installation
+      ansible.builtin.command:
+        cmd: wp --info
+      changed_when: false
+      register: wpcli_info
+
+    - name: Display WP-CLI version
+      ansible.builtin.debug:
+        msg: "{{ wpcli_info.stdout_lines }}"
+
+- name: Check if WordPress is already installed
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+  register: wp_config_check
+
+- name: Download and extract WordPress
+  when: not wp_config_check.stat.exists
+  block:
+    - name: Download WordPress
+      ansible.builtin.get_url:
+        url: "{{ wordpress_download_url if wordpress_version != 'latest' else 'https://wordpress.org/latest.tar.gz' }}"
+        dest: "/tmp/wordpress.tar.gz"
+        mode: "0644"
+      register: wp_download
+
+    - name: Extract WordPress
+      ansible.builtin.unarchive:
+        src: "/tmp/wordpress.tar.gz"
+        dest: "{{ wordpress_install_dir | dirname }}"
+        remote_src: true
+        owner: "{{ wordpress_system_user }}"
+        group: "{{ wordpress_system_group }}"
+        creates: "{{ wordpress_install_dir }}/wp-admin"
+
+    - name: Clean up WordPress archive
+      ansible.builtin.file:
+        path: "/tmp/wordpress.tar.gz"
+        state: absent
+
+- name: Set WordPress directory ownership
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    recurse: true
+    state: directory
+
+- name: Set WordPress file permissions
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    recurse: true
+    file_type: file
+  register: wp_files
+
+- name: Apply file permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_file_permissions }}"
+  loop: "{{ wp_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Set WordPress directory permissions
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    recurse: true
+    file_type: directory
+  register: wp_dirs
+
+- name: Apply directory permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_dir_permissions }}"
+  loop: "{{ wp_dirs.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Create wp-content subdirectories
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/{{ item }}"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: "0755"
+  loop:
+    - uploads
+    - upgrade
+    - cache
+
+- name: Install WordPress using WP-CLI
+  when:
+    - wordpress_install_wpcli | bool
+    - not wp_config_check.stat.exists
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  block:
+    - name: Run WordPress installation
+      ansible.builtin.command:
+        cmd: >
+          wp core install
+          --path={{ wordpress_install_dir }}
+          --url={{ wordpress_site_url }}
+          --title="{{ wordpress_site_title }}"
+          --admin_user={{ wordpress_admin_user }}
+          --admin_password={{ wordpress_admin_password }}
+          --admin_email={{ wordpress_admin_email }}
+          --skip-email
+      args:
+        creates: "{{ wordpress_install_dir }}/wp-config.php"
+      no_log: true
+      register: wp_install_result
+
+    - name: Display installation result
+      ansible.builtin.debug:
+        msg: "WordPress installed successfully"
+      when: wp_install_result.changed

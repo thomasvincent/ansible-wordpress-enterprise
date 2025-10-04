@@ -1,0 +1,36 @@
+---
+galaxy_info:
+  role_name: wordpress_enterprise
+  namespace: thomasvincent
+  author: Thomas Vincent
+  description: Enterprise-grade WordPress installation and configuration for RHEL and Ubuntu
+  company: Open Source
+  license: Apache-2.0
+  min_ansible_version: "2.14"
+
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+
+  galaxy_tags:
+    - wordpress
+    - web
+    - cms
+    - php
+    - nginx
+    - apache
+    - mysql
+    - mariadb
+    - enterprise
+    - production
+
+dependencies: []
+
+allow_duplicates: false

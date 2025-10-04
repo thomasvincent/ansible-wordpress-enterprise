@@ -1,0 +1,216 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint yamllint
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
+  test-ubuntu-22:
+    name: Test - Ubuntu 22.04
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Molecule and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install molecule molecule-plugins[docker] ansible pytest-testinfra
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install ansible.posix
+
+      - name: Run Molecule test
+        run: molecule test
+        env:
+          MOLECULE_DISTRO: ubuntu2204
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  test-ubuntu-24:
+    name: Test - Ubuntu 24.04
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Molecule and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install molecule molecule-plugins[docker] ansible pytest-testinfra
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install ansible.posix
+
+      - name: Run Molecule test
+        run: molecule test
+        env:
+          MOLECULE_DISTRO: ubuntu2404
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  test-rocky-9:
+    name: Test - Rocky Linux 9
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Molecule and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install molecule molecule-plugins[docker] ansible pytest-testinfra
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install ansible.posix
+
+      - name: Run Molecule test
+        run: molecule test
+        env:
+          MOLECULE_DISTRO: rockylinux9
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [test-ubuntu-22, test-ubuntu-24, test-rocky-9]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: wordpress-ansible:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test with docker-compose
+        run: |
+          docker-compose up -d ubuntu-22
+          sleep 10
+          docker-compose exec -T ubuntu-22 ansible --version
+          docker-compose down
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [integration-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Get version from meta
+        id: get_version
+        run: |
+          VERSION=$(grep 'version:' meta/main.yml | head -1 | awk '{print $2}' | tr -d '"')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.get_version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to Ansible Galaxy
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          ansible-galaxy role import --api-key ${{ secrets.GALAXY_API_KEY }} thomasvincent wordpress_enterprise
+        continue-on-error: true

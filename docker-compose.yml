@@ -1,0 +1,179 @@
+---
+version: '3.8'
+
+services:
+  # Ubuntu 22.04 test environment
+  ubuntu-22:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ubuntu:22.04
+    image: wordpress-ansible:ubuntu-22.04
+    container_name: wordpress-ansible-ubuntu-22
+    hostname: ubuntu-wordpress
+    privileged: true
+    volumes:
+      - .:/workspace:rw
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    environment:
+      - ANSIBLE_FORCE_COLOR=true
+    command: /sbin/init
+    networks:
+      - wordpress-net
+
+  # Ubuntu 24.04 test environment
+  ubuntu-24:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ubuntu:24.04
+    image: wordpress-ansible:ubuntu-24.04
+    container_name: wordpress-ansible-ubuntu-24
+    hostname: ubuntu24-wordpress
+    privileged: true
+    volumes:
+      - .:/workspace:rw
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    environment:
+      - ANSIBLE_FORCE_COLOR=true
+    command: /sbin/init
+    networks:
+      - wordpress-net
+
+  # Rocky Linux 9 test environment
+  rocky-9:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: rockylinux:9
+    image: wordpress-ansible:rocky-9
+    container_name: wordpress-ansible-rocky-9
+    hostname: rocky-wordpress
+    privileged: true
+    volumes:
+      - .:/workspace:rw
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    environment:
+      - ANSIBLE_FORCE_COLOR=true
+    command: /sbin/init
+    networks:
+      - wordpress-net
+
+  # Development environment with all services
+  wordpress-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ubuntu:22.04
+    image: wordpress-ansible:dev
+    container_name: wordpress-dev
+    hostname: wordpress-dev
+    privileged: true
+    ports:
+      - "8080:80"
+      - "8443:443"
+      - "3306:3306"
+      - "6379:6379"
+    volumes:
+      - .:/workspace:rw
+      - wordpress-data:/var/www/wordpress
+      - mysql-data:/var/lib/mysql
+      - redis-data:/var/lib/redis
+    environment:
+      - ANSIBLE_FORCE_COLOR=true
+      - WORDPRESS_ENV=development
+    command: /sbin/init
+    networks:
+      - wordpress-net
+    depends_on:
+      - mysql
+      - redis
+
+  # MySQL database for development
+  mysql:
+    image: mariadb:10.11
+    container_name: wordpress-mysql
+    hostname: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - wordpress-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+  # Redis cache for development
+  redis:
+    image: redis:7-alpine
+    container_name: wordpress-redis
+    hostname: redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - wordpress-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: wordpress-mailhog
+    hostname: mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - wordpress-net
+
+  # Molecule test runner
+  molecule:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ubuntu:22.04
+    image: wordpress-ansible:molecule
+    container_name: wordpress-molecule
+    hostname: molecule
+    privileged: true
+    volumes:
+      - .:/workspace:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    environment:
+      - ANSIBLE_FORCE_COLOR=true
+      - MOLECULE_DISTRO=ubuntu2204
+    command: molecule test
+    networks:
+      - wordpress-net
+
+networks:
+  wordpress-net:
+    driver: bridge
+    name: wordpress-network
+
+volumes:
+  wordpress-data:
+    name: wordpress-data
+  mysql-data:
+    name: mysql-data
+  redis-data:
+    name: redis-data

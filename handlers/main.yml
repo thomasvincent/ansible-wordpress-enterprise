@@ -1,0 +1,101 @@
+---
+# Handlers for WordPress Enterprise Role
+
+- name: Restart nginx
+  ansible.builtin.service:
+    name: "{{ wordpress_web_server_service.nginx }}"
+    state: restarted
+  when: wordpress_web_server == "nginx"
+
+- name: Reload nginx
+  ansible.builtin.service:
+    name: "{{ wordpress_web_server_service.nginx }}"
+    state: reloaded
+  when: wordpress_web_server == "nginx"
+
+- name: Restart apache
+  ansible.builtin.service:
+    name: "{{ wordpress_web_server_service.apache }}"
+    state: restarted
+  when: wordpress_web_server == "apache"
+
+- name: Reload apache
+  ansible.builtin.service:
+    name: "{{ wordpress_web_server_service.apache }}"
+    state: reloaded
+  when: wordpress_web_server == "apache"
+
+- name: Restart php-fpm
+  ansible.builtin.service:
+    name: "{{ wordpress_php_fpm_service }}"
+    state: restarted
+
+- name: Reload php-fpm
+  ansible.builtin.service:
+    name: "{{ wordpress_php_fpm_service }}"
+    state: reloaded
+
+- name: Restart mysql
+  ansible.builtin.service:
+    name: "{{ wordpress_db_service.mysql }}"
+    state: restarted
+  when: wordpress_db_engine == "mysql"
+
+- name: Restart mariadb
+  ansible.builtin.service:
+    name: "{{ wordpress_db_service.mariadb }}"
+    state: restarted
+  when: wordpress_db_engine == "mariadb"
+
+- name: Restart redis
+  ansible.builtin.service:
+    name: "{{ wordpress_redis_service }}"
+    state: restarted
+  when: wordpress_enable_redis | bool
+
+- name: Restart memcached
+  ansible.builtin.service:
+    name: "{{ wordpress_memcached_service }}"
+    state: restarted
+  when: wordpress_enable_memcached | bool
+
+- name: Reload firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+
+- name: Reload ufw
+  community.general.ufw:
+    state: reloaded
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  when: wordpress_enable_fail2ban | bool
+
+- name: Run wp-cli cache flush
+  ansible.builtin.command:
+    cmd: "wp cache flush --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  changed_when: false
+  when: wordpress_install_wpcli | bool
+
+- name: Update nginx config test
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+  when: wordpress_web_server == "nginx"
+
+- name: Update apache config test
+  ansible.builtin.command:
+    cmd: "{{ 'apachectl' if ansible_os_family == 'RedHat' else 'apache2ctl' }} -t"
+  changed_when: false
+  when: wordpress_web_server == "apache"
