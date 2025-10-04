@@ -1,94 +1,122 @@
-# Ansible Role: WordPress Enterprise
+# Ansible WordPress Enterprise
 
 [![CI](https://github.com/thomasvincent/ansible-wordpress-enterprise/workflows/CI/badge.svg)](https://github.com/thomasvincent/ansible-wordpress-enterprise/actions)
 [![Ansible Galaxy](https://img.shields.io/badge/ansible--galaxy-wordpress__enterprise-blue.svg)](https://galaxy.ansible.com/thomasvincent/wordpress_enterprise)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Ansible](https://img.shields.io/badge/ansible-%3E%3D2.14-blue)](https://docs.ansible.com/)
+[![Platform](https://img.shields.io/badge/platform-Ubuntu%20%7C%20RHEL%20%7C%20Rocky-lightgrey)](https://github.com/thomasvincent/ansible-wordpress-enterprise)
 
-Enterprise-grade Ansible role for deploying and managing WordPress installations with support for multiple cloud providers, external databases, caching systems, and CDN integration.
+🚀 **Production-ready Ansible role for deploying and managing WordPress at scale** - Enterprise-grade WordPress deployment with support for multiple cloud providers, high availability, advanced security, and comprehensive monitoring.
 
-## Features
+## 📚 Table of Contents
 
-### 🚀 Core Features
-- ✅ **Multi-OS Support**: RHEL 8/9, Ubuntu 20.04/22.04/24.04
-- ✅ **Web Servers**: Nginx or Apache with HTTP/2 and SSL/TLS
-- ✅ **PHP Versions**: 7.4, 8.0, 8.1, 8.2, 8.3
-- ✅ **Databases**: MySQL or MariaDB (local or external)
-- ✅ **Idempotent Operations**: Safe to run multiple times
-- ✅ **WP-CLI Integration**: Command-line WordPress management
-- ✅ **Plugin & Theme Management**: Automated installation and updates
-- ✅ **Security Hardening**: Fail2ban, firewall, SELinux support
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Usage Examples](#-usage-examples)
+- [Cloud Provider Configurations](#-cloud-provider-configurations)
+- [Advanced Configurations](#-advanced-configurations)
+- [Security](#-security)
+- [Performance Tuning](#-performance-tuning)
+- [High Availability](#-high-availability)
+- [Monitoring & Logging](#-monitoring--logging)
+- [Backup & Recovery](#-backup--recovery)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [Support](#-support)
+- [License](#-license)
 
-### ☁️ Cloud Provider Support
-- **Cloudflare**: DNS, CDN, DDoS protection
-- **DigitalOcean**: Spaces (S3-compatible), Managed Databases, CDN
-- **Google Cloud Platform**: Cloud SQL, Memorystore, Cloud Storage, CDN
-- **Microsoft Azure**: Azure Database, Azure Cache for Redis, Blob Storage, CDN
-- **Oracle Cloud**: Object Storage, Autonomous Database
-- **AWS**: RDS/Aurora, ElastiCache, S3, CloudFront (compatible)
+## 🌟 Features
 
-### 🗄️ External Services
-- **Managed Databases**: RDS, Cloud SQL, Azure Database, DigitalOcean DB
-- **Managed Cache**: ElastiCache, Memorystore, Azure Redis, DO Redis
-- **Object Storage**: S3, Google Cloud Storage, Azure Blob, DO Spaces
-- **Email Services**: SendGrid, Amazon SES, Mailgun, SMTP
-- **CDN**: Cloudflare, CloudFront, BunnyCDN, Fastly
+### Core Capabilities
 
-### ⚡ Performance Features
-- Redis/Memcached object caching
-- FastCGI caching
-- Opcache optimization
-- Image optimization (WebP/AVIF support)
-- HTTP/2 with Server Push
-- Gzip and Brotli compression
-- Database query caching
+✅ **Multi-Platform Support**
+- Ubuntu 20.04 LTS, 22.04 LTS, 24.04 LTS
+- RHEL 8, 9 / Rocky Linux 8, 9 / AlmaLinux 8, 9
+- CentOS Stream 8, 9
+- Debian 11, 12
 
-### 🔒 Security Features
-- SSL/TLS (Let's Encrypt or custom certificates)
-- Fail2ban WordPress-specific rules
-- Firewall configuration (firewalld/ufw)
-- SELinux policies (RHEL)
+✅ **Web Server Options**
+- **Nginx**: FastCGI cache, HTTP/2, SSL/TLS, rate limiting
+- **Apache**: mod_php/PHP-FPM, ModSecurity WAF, HTTP/2
+
+✅ **PHP Support**
+- PHP versions: 7.4, 8.0, 8.1, 8.2, 8.3
+- OPcache optimization
+- PHP-FPM tuning
+- Multiple PHP version support
+
+✅ **Database Engines**
+- MySQL 8.0+
+- MariaDB 10.6+
+- Percona Server 8.0+
+- External database support (RDS, Cloud SQL, Azure Database)
+
+### Enterprise Features
+
+🏢 **High Availability**
+- Load balancer integration (HAProxy, Nginx)
+- Database clustering (Galera, Group Replication)
+- Shared storage (NFS, GlusterFS, Object Storage)
+- Session persistence
+
+🔒 **Security**
+- SSL/TLS with Let's Encrypt or custom certificates
+- Web Application Firewall (ModSecurity)
+- Fail2ban with WordPress-specific rules
 - Security headers (HSTS, CSP, X-Frame-Options)
-- Disable file editing in WordPress
-- Automated security keys generation
-- wp-config.php hardening
+- File integrity monitoring
+- Automated security updates
+- SELinux/AppArmor support
 
-## Requirements
+⚡ **Performance**
+- Redis/Memcached object caching
+- FastCGI/proxy caching
+- CDN integration (Cloudflare, CloudFront, Fastly)
+- Image optimization (WebP, AVIF)
+- Database query optimization
+- HTTP/2 with Server Push
+- Brotli compression
 
-- Ansible 2.14 or higher
-- Target OS: RHEL 8/9 or Ubuntu 20.04/22.04/24.04
-- Sudo/root access on target hosts
-- Python 3 on control and target nodes
+📊 **Monitoring & Logging**
+- Comprehensive logging (access, error, slow query)
+- Health checks and uptime monitoring
+- Performance metrics collection
+- Log aggregation support
+- Alert notifications
 
-### Ansible Collections Required
+### Cloud Provider Support
+
+☁️ **Native Cloud Integration**
+
+| Provider | Features |
+|----------|----------|
+| **AWS** | EC2, RDS/Aurora, ElastiCache, S3, CloudFront, Route53, SES |
+| **Google Cloud** | Compute Engine, Cloud SQL, Memorystore, Cloud Storage, Cloud CDN |
+| **Microsoft Azure** | VMs, Azure Database, Azure Cache, Blob Storage, Azure CDN |
+| **DigitalOcean** | Droplets, Managed Database, Spaces, CDN |
+| **Cloudflare** | DNS, CDN, DDoS Protection, Workers, Page Rules |
+| **Oracle Cloud** | Compute, Autonomous Database, Object Storage |
+
+## 🚀 Quick Start
+
+### Basic Installation
 
 ```bash
-ansible-galaxy collection install community.general
-ansible-galaxy collection install community.mysql
-ansible-galaxy collection install ansible.posix
-```
-
-## Installation
-
-### From Ansible Galaxy
-
-```bash
+# Install from Ansible Galaxy
 ansible-galaxy install thomasvincent.wordpress_enterprise
-```
 
-### From Source
-
-```bash
+# Clone from GitHub
 git clone https://github.com/thomasvincent/ansible-wordpress-enterprise.git
-cd ansible-wordpress-enterprise
 ```
 
-## Quick Start
-
-### Basic Usage
+### Minimal Playbook
 
 ```yaml
 ---
-- hosts: wordpress_servers
+- name: Deploy WordPress
+  hosts: wordpress_servers
   become: true
   roles:
     - role: thomasvincent.wordpress_enterprise
@@ -99,55 +127,297 @@ cd ansible-wordpress-enterprise
         wordpress_admin_email: "admin@example.com"
 ```
 
-### Production Configuration
+### Production Deployment
 
 ```yaml
 ---
-- hosts: wordpress_servers
+- name: Production WordPress Deployment
+  hosts: wordpress_production
   become: true
+  
+  vars_files:
+    - vars/production.yml
+    - vault/secrets.yml
+  
   roles:
     - role: thomasvincent.wordpress_enterprise
       vars:
-        # WordPress Configuration
+        # Basic Configuration
         wordpress_version: "6.4.2"
         wordpress_site_url: "https://{{ ansible_fqdn }}"
-        wordpress_site_title: "Production WordPress"
-
-        # Web Server
+        wordpress_site_title: "Enterprise WordPress"
+        wordpress_environment: "production"
+        
+        # Web Server & PHP
         wordpress_web_server: "nginx"
-        wordpress_enable_ssl: true
-        wordpress_use_letsencrypt: true
-
-        # Database
-        wordpress_db_engine: "mariadb"
-        wordpress_db_name: "wordpress_prod"
-
-        # PHP
         wordpress_php_version: "8.2"
         wordpress_php_memory_limit: "512M"
-
+        
+        # Database
+        wordpress_db_engine: "mysql"
+        wordpress_use_external_db: true
+        wordpress_external_db_host: "{{ vault_db_host }}"
+        
         # Caching
         wordpress_enable_redis: true
         wordpress_enable_object_cache: true
-
+        
         # Security
+        wordpress_enable_ssl: true
+        wordpress_use_letsencrypt: true
         wordpress_enable_fail2ban: true
         wordpress_configure_firewall: true
+        
+        # Performance
+        wordpress_enable_cdn: true
+        wordpress_cdn_provider: "cloudflare"
+        
+        # Monitoring
+        wordpress_enable_monitoring: true
+        wordpress_enable_backups: true
 ```
 
-## Cloud Provider Configurations
+## 📋 Requirements
 
-### Cloudflare
+### System Requirements
 
-Full integration with Cloudflare services:
+- **Control Node**
+  - Ansible 2.14 or higher
+  - Python 3.8+
+  
+- **Target Nodes**
+  - Supported OS (see platform support)
+  - Python 3.6+
+  - Sudo/root access
+  - Minimum 2GB RAM
+  - 20GB disk space
+
+### Required Ansible Collections
+
+```bash
+ansible-galaxy collection install community.general
+ansible-galaxy collection install community.mysql
+ansible-galaxy collection install ansible.posix
+```
+
+### Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+## 📦 Installation
+
+### Method 1: Ansible Galaxy (Recommended)
+
+```bash
+# Install the role
+ansible-galaxy install thomasvincent.wordpress_enterprise
+
+# Install with specific version
+ansible-galaxy install thomasvincent.wordpress_enterprise,v1.0.0
+
+# Update to latest version
+ansible-galaxy install thomasvincent.wordpress_enterprise --force
+```
+
+### Method 2: Requirements File
+
+Create `requirements.yml`:
 
 ```yaml
 ---
-wordpress_cloud_provider: "cloudflare"
+roles:
+  - name: thomasvincent.wordpress_enterprise
+    version: v1.0.0
+
+collections:
+  - name: community.general
+  - name: community.mysql
+  - name: ansible.posix
+```
+
+Install:
+
+```bash
+ansible-galaxy install -r requirements.yml
+```
+
+### Method 3: Git Submodule
+
+```bash
+# Add as submodule
+git submodule add https://github.com/thomasvincent/ansible-wordpress-enterprise.git roles/wordpress_enterprise
+
+# Update submodule
+git submodule update --remote roles/wordpress_enterprise
+```
+
+## 📖 Usage Examples
+
+### Development Environment
+
+```yaml
+---
+- name: WordPress Development Environment
+  hosts: localhost
+  connection: local
+  become: true
+  
+  roles:
+    - role: wordpress_enterprise
+      vars:
+        wordpress_site_url: "http://localhost:8080"
+        wordpress_site_title: "Development Site"
+        wordpress_debug: true
+        wordpress_debug_log: true
+        wordpress_debug_display: true
+        wordpress_environment: "development"
+        
+        # Use SQLite for development
+        wordpress_db_engine: "sqlite"
+        
+        # Disable production features
+        wordpress_enable_ssl: false
+        wordpress_enable_fail2ban: false
+        wordpress_configure_firewall: false
+        wordpress_enable_backups: false
+```
+
+### Staging Environment
+
+```yaml
+---
+- name: WordPress Staging Deployment
+  hosts: staging_servers
+  become: true
+  
+  vars_files:
+    - vars/staging.yml
+  
+  roles:
+    - role: thomasvincent.wordpress_enterprise
+      vars:
+        wordpress_environment: "staging"
+        wordpress_site_url: "https://staging.example.com"
+        
+        # Enable debugging for staging
+        wordpress_debug: true
+        wordpress_debug_log: true
+        wordpress_debug_display: false
+        
+        # Use production-like configuration
+        wordpress_web_server: "nginx"
+        wordpress_php_version: "8.2"
+        wordpress_enable_ssl: true
+        wordpress_use_letsencrypt: true
+        
+        # Basic security
+        wordpress_enable_fail2ban: true
+        wordpress_configure_firewall: true
+        
+        # Enable monitoring
+        wordpress_enable_monitoring: true
+```
+
+## ☁️ Cloud Provider Configurations
+
+### AWS Configuration
+
+```yaml
+---
+wordpress_cloud_provider: "aws"
+
+# EC2 Configuration
+wordpress_aws_region: "us-east-1"
+wordpress_aws_instance_type: "t3.medium"
+
+# RDS Configuration
+wordpress_use_external_db: true
+wordpress_aws_rds_enabled: true
+wordpress_external_db_host: "wordpress.cluster-xxxxx.us-east-1.rds.amazonaws.com"
+wordpress_external_db_port: 3306
+wordpress_external_db_name: "wordpress_prod"
+wordpress_external_db_user: "{{ vault_aws_db_user }}"
+wordpress_external_db_password: "{{ vault_aws_db_password }}"
+wordpress_external_db_ssl_enabled: true
+
+# ElastiCache Redis
+wordpress_use_external_cache: true
+wordpress_aws_elasticache_enabled: true
+wordpress_redis_host: "wordpress-redis.xxxxx.cache.amazonaws.com"
+wordpress_redis_port: 6379
+
+# S3 Media Storage
+wordpress_aws_s3_enabled: true
+wordpress_aws_s3_bucket: "wordpress-media-prod"
+wordpress_aws_s3_region: "us-east-1"
+wordpress_aws_s3_access_key: "{{ vault_aws_s3_access_key }}"
+wordpress_aws_s3_secret_key: "{{ vault_aws_s3_secret_key }}"
+
+# CloudFront CDN
+wordpress_aws_cloudfront_enabled: true
+wordpress_aws_cloudfront_distribution_id: "EXXXXXXXXXXXXX"
+wordpress_cdn_url: "https://dxxxxx.cloudfront.net"
+
+# SES Email
+wordpress_smtp_enabled: true
+wordpress_smtp_provider: "ses"
+wordpress_smtp_host: "email-smtp.us-east-1.amazonaws.com"
+wordpress_smtp_port: 587
+wordpress_smtp_user: "{{ vault_aws_ses_user }}"
+wordpress_smtp_password: "{{ vault_aws_ses_password }}"
+```
+
+### Google Cloud Platform Configuration
+
+```yaml
+---
+wordpress_cloud_provider: "google"
+
+# GCP Project
+wordpress_gcp_project_id: "my-wordpress-project"
+wordpress_gcp_region: "us-central1"
+wordpress_gcp_zone: "us-central1-a"
+
+# Cloud SQL
+wordpress_use_external_db: true
+wordpress_gcp_cloudsql_enabled: true
+wordpress_gcp_cloudsql_instance: "wordpress-mysql"
+wordpress_gcp_cloudsql_tier: "db-n1-standard-2"
+wordpress_external_db_host: "127.0.0.1"  # Via Cloud SQL Proxy
+wordpress_external_db_port: 3306
+wordpress_gcp_cloudsql_proxy_enabled: true
+
+# Memorystore Redis
+wordpress_use_external_cache: true
+wordpress_gcp_memorystore_enabled: true
+wordpress_gcp_memorystore_instance: "wordpress-redis"
+wordpress_redis_host: "10.0.0.4"
+wordpress_redis_port: 6379
+
+# Cloud Storage
+wordpress_gcp_storage_enabled: true
+wordpress_gcp_storage_bucket: "wordpress-media-prod"
+wordpress_gcp_storage_service_account_key: "{{ vault_gcp_sa_key }}"
+
+# Cloud CDN
+wordpress_gcp_cdn_enabled: true
+wordpress_cdn_url: "https://cdn.example.com"
+
+# Cloud Load Balancing
+wordpress_gcp_load_balancer_enabled: true
+wordpress_gcp_backend_service: "wordpress-backend"
+```
+
+### Cloudflare Configuration
+
+```yaml
+---
 wordpress_cloudflare_enabled: true
 wordpress_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
-wordpress_cloudflare_zone_id: "your-zone-id"
-wordpress_cloudflare_email: "your-email@example.com"
+wordpress_cloudflare_zone_id: "{{ vault_cloudflare_zone_id }}"
+wordpress_cloudflare_account_id: "{{ vault_cloudflare_account_id }}"
 
 # DNS Management
 wordpress_cloudflare_dns_records:
@@ -155,217 +425,566 @@ wordpress_cloudflare_dns_records:
     type: "A"
     value: "{{ ansible_default_ipv4.address }}"
     proxied: true
+  - name: "www.{{ wordpress_server_name }}"
+    type: "CNAME"
+    value: "{{ wordpress_server_name }}"
+    proxied: true
 
-# CDN Configuration
+# Security Settings
+wordpress_cloudflare_security_level: "medium"
+wordpress_cloudflare_ssl_mode: "full_strict"
+wordpress_cloudflare_always_https: true
+wordpress_cloudflare_hsts_enabled: true
+wordpress_cloudflare_hsts_max_age: 31536000
+
+# Performance
 wordpress_cloudflare_cdn_enabled: true
-wordpress_cloudflare_cache_ttl: 14400
-wordpress_cloudflare_purge_on_update: true
+wordpress_cloudflare_cache_level: "standard"
+wordpress_cloudflare_browser_cache_ttl: 14400
+wordpress_cloudflare_auto_minify:
+  js: true
+  css: true
+  html: true
+
+# Page Rules
+wordpress_cloudflare_page_rules:
+  - target: "*/wp-admin/*"
+    actions:
+      cache_level: "bypass"
+      security_level: "high"
+  - target: "*/wp-login.php"
+    actions:
+      cache_level: "bypass"
+      security_level: "high"
+
+# Workers (Optional)
+wordpress_cloudflare_workers_enabled: false
+wordpress_cloudflare_workers_route: "*/api/*"
+wordpress_cloudflare_workers_script: "wordpress-api-handler"
 ```
 
-### DigitalOcean
+## 🔧 Advanced Configurations
 
-DigitalOcean Spaces, Managed Database, and CDN:
+### Multi-Site Network
 
 ```yaml
 ---
-wordpress_cloud_provider: "digitalocean"
-wordpress_digitalocean_enabled: true
-wordpress_digitalocean_token: "{{ vault_do_token }}"
+wordpress_multisite_enabled: true
+wordpress_multisite_type: "subdomain"  # or "subdirectory"
+wordpress_multisite_domain: "example.com"
 
-# Managed Database
-wordpress_use_external_db: true
-wordpress_external_db_host: "your-db-cluster.db.ondigitalocean.com"
-wordpress_external_db_port: 25060
-wordpress_external_db_ssl_enabled: true
-
-# Spaces (Object Storage)
-wordpress_digitalocean_spaces_enabled: true
-wordpress_digitalocean_spaces_key: "{{ vault_do_spaces_key }}"
-wordpress_digitalocean_spaces_secret: "{{ vault_do_spaces_secret }}"
-wordpress_digitalocean_spaces_bucket: "wordpress-uploads"
-wordpress_digitalocean_spaces_region: "nyc3"
-
-# Managed Redis
-wordpress_use_external_cache: true
-wordpress_do_redis_enabled: true
-wordpress_do_redis_host: "your-redis-cluster.db.ondigitalocean.com"
-wordpress_do_redis_port: 25061
-wordpress_do_redis_password: "{{ vault_do_redis_password }}"
-
-# CDN
-wordpress_digitalocean_cdn_enabled: true
+wordpress_multisite_sites:
+  - domain: "blog.example.com"
+    title: "Company Blog"
+    admin_email: "blog@example.com"
+  - domain: "shop.example.com"
+    title: "Online Store"
+    admin_email: "shop@example.com"
 ```
 
-### Google Cloud Platform
-
-Cloud SQL, Memorystore, and Cloud Storage:
+### Custom PHP Configuration
 
 ```yaml
 ---
-wordpress_cloud_provider: "google"
-wordpress_gcp_enabled: true
-wordpress_gcp_project_id: "your-project-id"
-wordpress_gcp_service_account_key: "{{ vault_gcp_sa_key }}"
+# PHP Version Management
+wordpress_php_version: "8.2"
+wordpress_php_versions_available:
+  - "7.4"
+  - "8.0"
+  - "8.1"
+  - "8.2"
+  - "8.3"
 
-# Cloud SQL
-wordpress_use_external_db: true
-wordpress_gcp_cloudsql_enabled: true
-wordpress_gcp_cloudsql_instance: "your-instance-name"
-wordpress_external_db_host: "10.0.0.3"  # Private IP
-wordpress_gcp_cloudsql_proxy_enabled: true
+# PHP-FPM Pool Configuration
+wordpress_php_fpm_pm: "dynamic"
+wordpress_php_fpm_max_children: 50
+wordpress_php_fpm_start_servers: 5
+wordpress_php_fpm_min_spare_servers: 5
+wordpress_php_fpm_max_spare_servers: 35
+wordpress_php_fpm_max_requests: 500
 
-# Memorystore (Redis)
-wordpress_use_external_cache: true
-wordpress_gcp_memorystore_enabled: true
-wordpress_gcp_memorystore_host: "10.0.0.4"
-wordpress_gcp_memorystore_port: 6379
+# PHP Settings
+wordpress_php_memory_limit: "512M"
+wordpress_php_max_execution_time: 300
+wordpress_php_max_input_time: 300
+wordpress_php_max_input_vars: 5000
+wordpress_php_upload_max_filesize: "256M"
+wordpress_php_post_max_size: "256M"
 
-# Cloud Storage
-wordpress_gcp_storage_enabled: true
-wordpress_gcp_storage_bucket: "wordpress-media"
-wordpress_object_storage_enabled: true
-wordpress_object_storage_provider: "gcs"
-
-# CDN
-wordpress_gcp_cdn_enabled: true
+# OPcache Settings
+wordpress_opcache_enable: true
+wordpress_opcache_memory: 256
+wordpress_opcache_max_files: 10000
+wordpress_opcache_validate_timestamps: 0  # 0 for production
+wordpress_opcache_revalidate_freq: 0
 ```
 
-### Microsoft Azure
-
-Azure Database, Azure Cache, and Blob Storage:
+### Database Optimization
 
 ```yaml
 ---
-wordpress_cloud_provider: "azure"
-wordpress_azure_enabled: true
-wordpress_azure_subscription_id: "{{ vault_azure_subscription_id }}"
-wordpress_azure_resource_group: "wordpress-rg"
+# MySQL/MariaDB Tuning
+wordpress_mysql_innodb_buffer_pool_size: "1G"
+wordpress_mysql_innodb_log_file_size: "256M"
+wordpress_mysql_innodb_flush_method: "O_DIRECT"
+wordpress_mysql_innodb_file_per_table: true
+wordpress_mysql_query_cache_size: "128M"
+wordpress_mysql_query_cache_type: 1
+wordpress_mysql_max_connections: 500
+wordpress_mysql_thread_cache_size: 50
+wordpress_mysql_table_open_cache: 4000
 
-# Azure Database for MySQL
-wordpress_use_external_db: true
-wordpress_azure_db_enabled: true
-wordpress_azure_db_server: "wordpress-mysql-server.mysql.database.azure.com"
-wordpress_external_db_ssl_enabled: true
+# Slow Query Logging
+wordpress_mysql_slow_query_log: true
+wordpress_mysql_slow_query_log_file: "/var/log/mysql/slow-query.log"
+wordpress_mysql_long_query_time: 2
 
-# Azure Cache for Redis
-wordpress_use_external_cache: true
-wordpress_azure_redis_enabled: true
-wordpress_azure_redis_hostname: "wordpress-redis.redis.cache.windows.net"
-wordpress_azure_redis_port: 6380
-wordpress_azure_redis_password: "{{ vault_azure_redis_password }}"
-wordpress_azure_redis_ssl_enabled: true
-
-# Azure Blob Storage
-wordpress_azure_storage_enabled: true
-wordpress_azure_storage_account: "wordpressstorage"
-wordpress_azure_storage_key: "{{ vault_azure_storage_key }}"
-wordpress_azure_storage_container: "uploads"
-wordpress_object_storage_enabled: true
-wordpress_object_storage_provider: "azure_blob"
-
-# Azure CDN
-wordpress_azure_cdn_enabled: true
+# Database Maintenance
+wordpress_db_optimize_schedule: "weekly"
+wordpress_db_backup_before_optimize: true
 ```
 
-### Oracle Cloud Infrastructure
+## 🔒 Security
 
-OCI Object Storage and Autonomous Database:
+### Security Hardening Configuration
 
 ```yaml
 ---
-wordpress_cloud_provider: "oracle"
-wordpress_oci_enabled: true
-wordpress_oci_tenancy: "{{ vault_oci_tenancy }}"
-wordpress_oci_user: "{{ vault_oci_user }}"
-wordpress_oci_fingerprint: "{{ vault_oci_fingerprint }}"
-wordpress_oci_key_file: "/path/to/oci-api-key.pem"
-wordpress_oci_region: "us-ashburn-1"
+# WordPress Security
+wordpress_disable_file_edit: true
+wordpress_disable_file_mods: false
+wordpress_force_ssl_admin: true
+wordpress_disable_xmlrpc: true
+wordpress_disable_rest_api_public: true
 
-# Object Storage
-wordpress_oci_object_storage_enabled: true
-wordpress_oci_object_storage_bucket: "wordpress-uploads"
-wordpress_oci_object_storage_namespace: "your-namespace"
-wordpress_object_storage_enabled: true
-wordpress_object_storage_provider: "oci_storage"
+# File Permissions
+wordpress_secure_file_permissions: true
+wordpress_files_owner: "www-data"
+wordpress_files_group: "www-data"
+wordpress_files_mode: "0644"
+wordpress_dirs_mode: "0755"
 
-# Autonomous Database (use external DB config)
-wordpress_use_external_db: true
-wordpress_external_db_host: "your-db.oraclecloud.com"
-wordpress_external_db_ssl_enabled: true
+# Security Headers
+wordpress_security_headers:
+  - name: "X-Frame-Options"
+    value: "SAMEORIGIN"
+  - name: "X-Content-Type-Options"
+    value: "nosniff"
+  - name: "X-XSS-Protection"
+    value: "1; mode=block"
+  - name: "Referrer-Policy"
+    value: "strict-origin-when-cross-origin"
+  - name: "Content-Security-Policy"
+    value: "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'"
+
+# Fail2ban Configuration
+wordpress_fail2ban_enabled: true
+wordpress_fail2ban_maxretry: 5
+wordpress_fail2ban_findtime: "10m"
+wordpress_fail2ban_bantime: "1h"
+wordpress_fail2ban_ignoreips:
+  - "127.0.0.1/8"
+  - "192.168.0.0/16"
+
+# ModSecurity WAF (Apache only)
+wordpress_modsecurity_enabled: true
+wordpress_modsecurity_ruleset: "OWASP CRS 3.3"
+wordpress_modsecurity_custom_rules: []
+
+# File Integrity Monitoring
+wordpress_aide_enabled: true
+wordpress_aide_email: "security@example.com"
+wordpress_aide_schedule: "daily"
 ```
 
-## Email Service Configuration
-
-### SendGrid
+### SSL/TLS Configuration
 
 ```yaml
 ---
-wordpress_smtp_enabled: true
-wordpress_smtp_provider: "sendgrid"
-wordpress_smtp_host: "smtp.sendgrid.net"
-wordpress_smtp_port: 587
-wordpress_smtp_user: "apikey"
-wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
-wordpress_smtp_from_email: "noreply@example.com"
-wordpress_smtp_from_name: "{{ wordpress_site_title }}"
-wordpress_smtp_encryption: "tls"
+# Certificate Management
+wordpress_ssl_provider: "letsencrypt"  # or "custom", "self-signed"
+wordpress_ssl_cert_path: "/etc/ssl/certs/{{ wordpress_server_name }}.crt"
+wordpress_ssl_key_path: "/etc/ssl/private/{{ wordpress_server_name }}.key"
+
+# Let's Encrypt
+wordpress_letsencrypt_email: "{{ wordpress_admin_email }}"
+wordpress_letsencrypt_staging: false
+wordpress_letsencrypt_webroot: "/var/www/letsencrypt"
+
+# SSL Configuration
+wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+wordpress_ssl_ciphers: >-
+  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:
+  ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+wordpress_ssl_prefer_server_ciphers: true
+wordpress_ssl_session_cache: "shared:SSL:50m"
+wordpress_ssl_session_timeout: "1d"
+wordpress_ssl_stapling: true
+wordpress_ssl_stapling_verify: true
+
+# HSTS
+wordpress_hsts_enabled: true
+wordpress_hsts_max_age: 31536000
+wordpress_hsts_include_subdomains: true
+wordpress_hsts_preload: true
 ```
 
-### Amazon SES
+## ⚡ Performance Tuning
+
+### Caching Configuration
 
 ```yaml
 ---
-wordpress_smtp_enabled: true
-wordpress_smtp_provider: "ses"
-wordpress_smtp_host: "email-smtp.us-east-1.amazonaws.com"
-wordpress_smtp_port: 587
-wordpress_smtp_user: "{{ vault_aws_smtp_user }}"
-wordpress_smtp_password: "{{ vault_aws_smtp_password }}"
-wordpress_smtp_encryption: "tls"
+# Object Caching
+wordpress_object_cache_provider: "redis"  # or "memcached"
+wordpress_redis_maxmemory: "512mb"
+wordpress_redis_maxmemory_policy: "allkeys-lru"
+wordpress_redis_databases: 16
+wordpress_redis_timeout: 5
+wordpress_redis_persistent: true
+
+# Page Caching (Nginx)
+wordpress_fastcgi_cache_enabled: true
+wordpress_fastcgi_cache_size: "256m"
+wordpress_fastcgi_cache_inactive: "60m"
+wordpress_fastcgi_cache_valid: "60m"
+wordpress_fastcgi_cache_methods: ["GET", "HEAD"]
+wordpress_fastcgi_cache_bypass_cookies:
+  - "wordpress_logged_in_"
+  - "wp-postpass_"
+  - "wordpress_no_cache"
+
+# Browser Caching
+wordpress_browser_cache_enabled: true
+wordpress_browser_cache_max_age: 31536000
+wordpress_browser_cache_types:
+  - "image/jpeg"
+  - "image/png"
+  - "image/gif"
+  - "image/webp"
+  - "image/svg+xml"
+  - "text/css"
+  - "application/javascript"
+  - "font/woff2"
 ```
 
-### Mailgun
+### CDN Integration
 
 ```yaml
 ---
-wordpress_smtp_enabled: true
-wordpress_smtp_provider: "mailgun"
-wordpress_smtp_host: "smtp.mailgun.org"
-wordpress_smtp_port: 587
-wordpress_smtp_user: "{{ vault_mailgun_smtp_user }}"
-wordpress_smtp_password: "{{ vault_mailgun_smtp_password }}"
-wordpress_smtp_encryption: "tls"
+# CDN Configuration
+wordpress_cdn_enabled: true
+wordpress_cdn_provider: "cloudflare"  # or "cloudfront", "fastly", "bunnycdn"
+wordpress_cdn_url: "https://cdn.example.com"
+wordpress_cdn_push_enabled: true
+
+# Asset Optimization
+wordpress_cdn_minify_html: true
+wordpress_cdn_minify_css: true
+wordpress_cdn_minify_js: true
+wordpress_cdn_combine_css: false
+wordpress_cdn_combine_js: false
+
+# Image Optimization
+wordpress_cdn_image_optimization: true
+wordpress_cdn_webp_enabled: true
+wordpress_cdn_avif_enabled: true
+wordpress_cdn_lazy_load: true
+wordpress_cdn_responsive_images: true
 ```
 
-## High Availability Setup
+## 🔄 High Availability
+
+### Load Balancer Configuration
 
 ```yaml
 ---
 wordpress_ha_enabled: true
-wordpress_ha_load_balancer: "nginx"
+wordpress_ha_load_balancer: "haproxy"  # or "nginx"
 
-wordpress_ha_nodes:
-  - host: "web1.example.com"
-    ip: "10.0.1.10"
-  - host: "web2.example.com"
-    ip: "10.0.1.11"
-  - host: "web3.example.com"
-    ip: "10.0.1.12"
+# Backend Servers
+wordpress_ha_backends:
+  - name: "web1"
+    address: "10.0.1.10:80"
+    weight: 1
+    max_connections: 100
+  - name: "web2"
+    address: "10.0.1.11:80"
+    weight: 1
+    max_connections: 100
+  - name: "web3"
+    address: "10.0.1.12:80"
+    weight: 1
+    max_connections: 100
 
-# External shared database
-wordpress_use_external_db: true
-wordpress_external_db_host: "db-cluster.example.com"
+# Health Checks
+wordpress_ha_health_check_interval: 2000
+wordpress_ha_health_check_timeout: 5000
+wordpress_ha_health_check_retries: 3
+wordpress_ha_health_check_uri: "/health"
 
-# Redis for session storage
-wordpress_ha_session_storage: "redis"
-wordpress_use_external_cache: true
-wordpress_redis_host: "redis-cluster.example.com"
-
-# Shared file storage (NFS/GlusterFS/Cloud Storage)
-wordpress_object_storage_enabled: true
+# Session Persistence
+wordpress_ha_session_persistence: true
+wordpress_ha_session_cookie: "SERVERID"
+wordpress_ha_session_storage: "redis"  # Shared session storage
 ```
 
-## Advanced Plugin Configuration
+### Database Clustering
+
+```yaml
+---
+# Galera Cluster (MariaDB)
+wordpress_db_cluster_enabled: true
+wordpress_db_cluster_type: "galera"
+wordpress_db_cluster_nodes:
+  - host: "db1.example.com"
+    port: 3306
+  - host: "db2.example.com"
+    port: 3306
+  - host: "db3.example.com"
+    port: 3306
+
+wordpress_db_cluster_sst_method: "rsync"
+wordpress_db_cluster_wsrep_provider: "/usr/lib/galera/libgalera_smm.so"
+
+# ProxySQL for connection pooling
+wordpress_proxysql_enabled: true
+wordpress_proxysql_admin_password: "{{ vault_proxysql_admin_password }}"
+wordpress_proxysql_monitor_password: "{{ vault_proxysql_monitor_password }}"
+```
+
+## 📊 Monitoring & Logging
+
+### Monitoring Configuration
+
+```yaml
+---
+# Monitoring Tools
+wordpress_monitoring_provider: "prometheus"  # or "datadog", "newrelic"
+
+# Prometheus Exporters
+wordpress_prometheus_node_exporter: true
+wordpress_prometheus_mysql_exporter: true
+wordpress_prometheus_nginx_exporter: true
+wordpress_prometheus_php_fpm_exporter: true
+
+# Health Checks
+wordpress_health_check_enabled: true
+wordpress_health_check_path: "/health"
+wordpress_health_check_response: "OK"
+
+# Custom Metrics
+wordpress_custom_metrics:
+  - name: "wordpress_posts_total"
+    query: "SELECT COUNT(*) FROM wp_posts WHERE post_status = 'publish'"
+  - name: "wordpress_users_total"
+    query: "SELECT COUNT(*) FROM wp_users"
+  - name: "wordpress_comments_total"
+    query: "SELECT COUNT(*) FROM wp_comments WHERE comment_approved = '1'"
+```
+
+### Logging Configuration
+
+```yaml
+---
+# Log Management
+wordpress_log_aggregator: "elasticsearch"  # or "splunk", "cloudwatch"
+wordpress_log_level: "info"
+wordpress_log_format: "json"
+
+# Log Paths
+wordpress_logs_dir: "/var/log/wordpress"
+wordpress_access_log: "{{ wordpress_logs_dir }}/access.log"
+wordpress_error_log: "{{ wordpress_logs_dir }}/error.log"
+wordpress_debug_log: "{{ wordpress_logs_dir }}/debug.log"
+
+# Log Rotation
+wordpress_logrotate_enabled: true
+wordpress_logrotate_frequency: "daily"
+wordpress_logrotate_retention: 30
+wordpress_logrotate_compress: true
+
+# Audit Logging
+wordpress_audit_log_enabled: true
+wordpress_audit_log_events:
+  - "user_login"
+  - "user_logout"
+  - "post_published"
+  - "plugin_activated"
+  - "theme_changed"
+```
+
+## 💾 Backup & Recovery
+
+### Backup Configuration
+
+```yaml
+---
+# Backup Settings
+wordpress_backup_enabled: true
+wordpress_backup_dir: "/var/backups/wordpress"
+wordpress_backup_retention_days: 30
+wordpress_backup_compression: "gzip"
+
+# Backup Schedule
+wordpress_backup_schedule:
+  - type: "full"
+    frequency: "weekly"
+    day: "sunday"
+    hour: 2
+  - type: "incremental"
+    frequency: "daily"
+    hour: 3
+
+# Backup Destinations
+wordpress_backup_destinations:
+  - type: "local"
+    path: "/var/backups/wordpress"
+  - type: "s3"
+    bucket: "wordpress-backups"
+    region: "us-east-1"
+    access_key: "{{ vault_aws_backup_access_key }}"
+    secret_key: "{{ vault_aws_backup_secret_key }}"
+  - type: "rsync"
+    host: "backup.example.com"
+    path: "/backups/wordpress"
+    ssh_key: "/root/.ssh/backup_rsa"
+
+# Backup Verification
+wordpress_backup_verify: true
+wordpress_backup_test_restore: true
+wordpress_backup_notification_email: "admin@example.com"
+```
+
+### Disaster Recovery
+
+```yaml
+---
+# Disaster Recovery Plan
+wordpress_dr_enabled: true
+wordpress_dr_site: "dr.example.com"
+wordpress_dr_sync_interval: "15m"
+
+# Recovery Time Objective (RTO)
+wordpress_dr_rto_hours: 4
+
+# Recovery Point Objective (RPO)
+wordpress_dr_rpo_minutes: 15
+
+# Automated Failover
+wordpress_dr_auto_failover: false
+wordpress_dr_health_check_failures: 3
+wordpress_dr_notification_channels:
+  - "email:ops@example.com"
+  - "slack:#incidents"
+  - "pagerduty:service-key"
+```
+
+## 🛠️ Troubleshooting
+
+### Common Issues and Solutions
+
+#### Issue: White Screen of Death
+
+```yaml
+# Enable WordPress debugging
+wordpress_debug: true
+wordpress_debug_log: true
+wordpress_debug_display: true
+
+# Check PHP errors
+wordpress_php_display_errors: true
+wordpress_php_error_reporting: "E_ALL"
+```
+
+#### Issue: Database Connection Errors
+
+```bash
+# Test database connectivity
+ansible wordpress_servers -m mysql_info -a "login_host={{ wordpress_db_host }} login_user={{ wordpress_db_user }} login_password={{ wordpress_db_password }}"
+
+# Check database variables
+ansible wordpress_servers -m mysql_variables -a "variable=max_connections"
+```
+
+#### Issue: Slow Performance
+
+```yaml
+# Enable query monitoring
+wordpress_mysql_slow_query_log: true
+wordpress_mysql_long_query_time: 1
+
+# Enable performance profiling
+wordpress_newrelic_enabled: true
+wordpress_newrelic_app_name: "WordPress Production"
+wordpress_newrelic_license_key: "{{ vault_newrelic_license }}"
+```
+
+#### Issue: Plugin Conflicts
+
+```yaml
+# Safe mode - disable all plugins
+wordpress_safe_mode: true
+wordpress_disabled_plugins:
+  - "problematic-plugin"
+  - "conflicting-plugin"
+```
+
+### Debug Commands
+
+```bash
+# Check WordPress installation
+ansible wordpress_servers -m command -a "wp core verify-checksums --path={{ wordpress_path }}"
+
+# List active plugins
+ansible wordpress_servers -m command -a "wp plugin list --status=active --path={{ wordpress_path }}"
+
+# Check database status
+ansible wordpress_servers -m command -a "wp db check --path={{ wordpress_path }}"
+
+# Clear cache
+ansible wordpress_servers -m command -a "wp cache flush --path={{ wordpress_path }}"
+
+# Run WordPress cron
+ansible wordpress_servers -m command -a "wp cron run --path={{ wordpress_path }}"
+```
+
+## 📈 Performance Benchmarking
+
+### Load Testing
+
+```yaml
+---
+# Apache Bench Testing
+wordpress_benchmark_ab_requests: 1000
+wordpress_benchmark_ab_concurrency: 100
+
+# Siege Testing
+wordpress_benchmark_siege_users: 50
+wordpress_benchmark_siege_time: "5M"
+
+# Custom Test URLs
+wordpress_benchmark_urls:
+  - "/"
+  - "/shop/"
+  - "/blog/"
+  - "/api/v1/posts"
+```
+
+### Performance Metrics
+
+```yaml
+---
+# Target Metrics
+wordpress_performance_targets:
+  page_load_time: 2.0  # seconds
+  time_to_first_byte: 0.5  # seconds
+  requests_per_second: 100
+  concurrent_users: 500
+  uptime_percentage: 99.9
+```
+
+## 🔌 Plugin Management
 
 ### Essential Plugins
 
@@ -375,301 +994,172 @@ wordpress_plugins:
   # Security
   - name: "wordfence"
     version: "latest"
-    state: "present"
-
-  - name: "all-in-one-wp-security-and-firewall"
-    version: "latest"
-    state: "present"
-
+    activate: true
+    config:
+      scan_schedule: "daily"
+      firewall_mode: "extended"
+  
   # Performance
-  - name: "wp-rocket"  # Premium, needs license
-    version: "latest"
-    state: "present"
-
-  - name: "redis-cache"
-    version: "latest"
-    state: "present"
-
+  - name: "wp-rocket"
+    version: "3.15"
+    activate: true
+    license_key: "{{ vault_wp_rocket_license }}"
+  
   # SEO
-  - name: "wordpress-seo"  # Yoast SEO
+  - name: "wordpress-seo"
     version: "latest"
-    state: "present"
-
-  # Backups
+    activate: true
+    config:
+      enable_xml_sitemap: true
+      enable_schema: true
+  
+  # Backup
   - name: "updraftplus"
     version: "latest"
-    state: "present"
+    activate: true
+    config:
+      backup_schedule: "daily"
+      remote_storage: "s3"
+```
 
-  # Cloud Integration
-  - name: "amazon-s3-and-cloudfront"  # For AWS S3
+### Theme Management
+
+```yaml
+---
+wordpress_themes:
+  - name: "twentytwentyfour"
     version: "latest"
-    state: "present"
-
-  - name: "wp-mail-smtp"  # For email providers
-    version: "latest"
-    state: "present"
+    activate: false
+  
+  - name: "custom-theme"
+    source: "https://example.com/themes/custom-theme.zip"
+    activate: true
+    
+wordpress_child_theme:
+  parent: "custom-theme"
+  name: "custom-theme-child"
+  activate: true
 ```
 
-### Custom Plugin Installation
+## 🧪 Testing
 
-```yaml
----
-wordpress_custom_plugins:
-  - name: "my-custom-plugin"
-    version: "1.0.0"
-    state: "present"
-    source: "https://example.com/plugins/my-custom-plugin-1.0.0.zip"
-
-  - name: "proprietary-plugin"
-    version: "2.1.0"
-    state: "present"
-    source: "https://license.example.com/download/plugin.zip"
-```
-
-## Performance Tuning
-
-```yaml
----
-# PHP-FPM Optimization
-wordpress_php_memory_limit: "512M"
-wordpress_php_max_execution_time: "300"
-wordpress_php_upload_max_filesize: "256M"
-wordpress_php_max_input_vars: "5000"
-
-# Opcache
-wordpress_opcache_enable: true
-wordpress_opcache_memory: "256"
-wordpress_opcache_max_files: "10000"
-wordpress_opcache_validate_timestamps: "0"
-
-# Redis
-wordpress_enable_redis: true
-wordpress_redis_maxmemory: "256mb"
-wordpress_redis_maxmemory_policy: "allkeys-lru"
-
-# Image Optimization
-wordpress_image_optimization_enabled: true
-wordpress_webp_enabled: true
-wordpress_avif_enabled: true
-wordpress_lazy_load_enabled: true
-
-# HTTP/2 and Compression
-wordpress_http2_push_enabled: true
-wordpress_http2_push_preload: true
-```
-
-## Security Hardening
-
-```yaml
----
-# WordPress Security
-wordpress_disable_file_edit: true
-wordpress_disable_file_mods: false
-wordpress_force_ssl_admin: true
-wordpress_disallow_unfiltered_html: true
-
-# Fail2ban
-wordpress_enable_fail2ban: true
-wordpress_fail2ban_maxretry: 5
-wordpress_fail2ban_findtime: "10m"
-wordpress_fail2ban_bantime: "1h"
-
-# Firewall
-wordpress_configure_firewall: true
-wordpress_allowed_ips:
-  - "192.168.1.0/24"
-  - "10.0.0.0/8"
-
-# SSL/TLS
-wordpress_enable_ssl: true
-wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
-wordpress_ssl_stapling: true
-```
-
-## Backup Configuration
-
-```yaml
----
-wordpress_enable_backups: true
-wordpress_backup_dir: "/var/backups/wordpress"
-wordpress_backup_retention_days: 30
-wordpress_backup_schedule_hour: "2"
-wordpress_backup_schedule_minute: "0"
-
-# Backup to cloud storage
-wordpress_backup_to_cloud: true
-wordpress_backup_cloud_provider: "s3"  # s3, gcs, azure_blob
-wordpress_backup_cloud_bucket: "wordpress-backups"
-```
-
-## Variables Reference
-
-See [defaults/main.yml](defaults/main.yml) for complete variable documentation.
-
-### Key Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `wordpress_version` | `latest` | WordPress version to install |
-| `wordpress_web_server` | `nginx` | Web server (nginx/apache) |
-| `wordpress_php_version` | `8.2` | PHP version (7.4-8.3) |
-| `wordpress_db_engine` | `mariadb` | Database engine |
-| `wordpress_enable_ssl` | `true` | Enable SSL/TLS |
-| `wordpress_enable_redis` | `true` | Enable Redis caching |
-| `wordpress_cloud_provider` | `none` | Cloud provider integration |
-
-## Dependencies
-
-None. This role is self-contained.
-
-## Example Playbook
-
-### Complete Production Setup
-
-```yaml
----
-- name: Deploy WordPress with Cloudflare and DigitalOcean
-  hosts: wordpress_servers
-  become: true
-
-  vars:
-    # Basic Configuration
-    wordpress_version: "6.4.2"
-    wordpress_site_url: "https://blog.example.com"
-    wordpress_site_title: "Example Blog"
-
-    # Cloud Provider
-    wordpress_cloud_provider: "cloudflare"
-    wordpress_cloudflare_enabled: true
-
-    # Database (DigitalOcean Managed)
-    wordpress_use_external_db: true
-    wordpress_external_db_host: "{{ vault_do_db_host }}"
-    wordpress_external_db_port: 25060
-    wordpress_external_db_ssl_enabled: true
-
-    # Cache (DigitalOcean Managed Redis)
-    wordpress_use_external_cache: true
-    wordpress_do_redis_enabled: true
-    wordpress_do_redis_host: "{{ vault_do_redis_host }}"
-
-    # Object Storage (DO Spaces)
-    wordpress_digitalocean_spaces_enabled: true
-    wordpress_object_storage_enabled: true
-
-    # Email (SendGrid)
-    wordpress_smtp_enabled: true
-    wordpress_smtp_provider: "sendgrid"
-
-    # Security
-    wordpress_enable_fail2ban: true
-    wordpress_configure_firewall: true
-
-  roles:
-    - thomasvincent.wordpress_enterprise
-```
-
-## Testing
-
-### Molecule Tests
+### Molecule Testing
 
 ```bash
-# Install molecule
-pip install molecule molecule-plugins[docker]
+# Install testing dependencies
+pip install molecule molecule-plugins[docker] ansible-lint yamllint
+
+# Run all tests
+molecule test
+
+# Run specific scenario
+molecule test -s default
+molecule test -s ubuntu-nginx
+molecule test -s rhel-apache
+
+# Interactive testing
+molecule converge
+molecule verify
+molecule destroy
+```
+
+### Integration Tests
+
+```yaml
+---
+# Test configuration in tests/integration/playbook.yml
+- name: Test WordPress Installation
+  hosts: test_servers
+  tasks:
+    - name: Check WordPress is accessible
+      uri:
+        url: "https://{{ wordpress_site_url }}"
+        status_code: 200
+    
+    - name: Verify database connection
+      command: wp db check --path={{ wordpress_path }}
+      become_user: "{{ wordpress_user }}"
+    
+    - name: Test admin login
+      uri:
+        url: "https://{{ wordpress_site_url }}/wp-login.php"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          log: "{{ wordpress_admin_user }}"
+          pwd: "{{ wordpress_admin_password }}"
+        status_code: 302
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/YOUR_USERNAME/ansible-wordpress-enterprise.git
+cd ansible-wordpress-enterprise
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks
+pre-commit install
 
 # Run tests
 molecule test
 
-# Test specific scenario
-molecule test -s ubuntu-nginx
-molecule test -s rhel-apache
+# Run linters
+ansible-lint
+yamllint .
 ```
 
-## Best Practices
+### Pull Request Process
 
-1. **Always use Ansible Vault for sensitive data**
-   ```bash
-   ansible-vault encrypt_string 'secret-password' --name 'wordpress_db_password'
-   ```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-2. **Use external managed services in production**
-   - Managed databases (RDS, Cloud SQL, Azure Database)
-   - Managed cache (ElastiCache, Memorystore)
-   - Object storage (S3, GCS, Azure Blob)
+## 📞 Support
 
-3. **Enable all security features**
-   - SSL/TLS with valid certificates
-   - Fail2ban
-   - Firewall rules
-   - Security headers
+- **Documentation**: [Wiki](https://github.com/thomasvincent/ansible-wordpress-enterprise/wiki)
+- **Issues**: [GitHub Issues](https://github.com/thomasvincent/ansible-wordpress-enterprise/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/thomasvincent/ansible-wordpress-enterprise/discussions)
+- **Security**: Report security vulnerabilities to security@example.com
 
-4. **Implement proper backups**
-   - Automated daily backups
-   - Off-site backup storage
-   - Regular restore testing
+## 📄 License
 
-5. **Use version pinning in production**
-   ```yaml
-   wordpress_version: "6.4.2"
-   wordpress_php_version: "8.2"
-   ```
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-6. **Monitor and log everything**
-   - Application logs
-   - Web server logs
-   - PHP-FPM logs
-   - Database slow query logs
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue**: WordPress white screen of death
-```yaml
-# Enable debugging
-wordpress_debug: true
-wordpress_debug_log: true
-wordpress_debug_display: true
-```
-
-**Issue**: PHP memory errors
-```yaml
-# Increase PHP memory
-wordpress_php_memory_limit: "512M"
-```
-
-**Issue**: Upload size limits
-```yaml
-# Increase upload limits
-wordpress_php_upload_max_filesize: "256M"
-wordpress_php_post_max_size: "256M"
-```
-
-## Contributing
-
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
-
-## Author
+## 👤 Author
 
 **Thomas Vincent**
 - GitHub: [@thomasvincent](https://github.com/thomasvincent)
 - Email: thomasvincent@users.noreply.github.com
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- WordPress community
-- Ansible community
-- Cloud provider documentation
+- WordPress Community
+- Ansible Community
+- Cloud Provider Documentation Teams
+- All contributors to this project
 
-## Support
+## 📊 Stats
 
-- GitHub Issues: https://github.com/thomasvincent/ansible-wordpress-enterprise/issues
-- Documentation: https://github.com/thomasvincent/ansible-wordpress-enterprise/wiki
+![GitHub stars](https://img.shields.io/github/stars/thomasvincent/ansible-wordpress-enterprise?style=social)
+![GitHub forks](https://img.shields.io/github/forks/thomasvincent/ansible-wordpress-enterprise?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/thomasvincent/ansible-wordpress-enterprise?style=social)
 
-## Changelog
+---
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+**Made with ❤️ by the open source community**
+
+⭐ Star this project if you find it helpful!
