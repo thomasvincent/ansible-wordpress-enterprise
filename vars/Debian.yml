@@ -1,0 +1,103 @@
+---
+# Ubuntu/Debian specific variables
+
+# Package names
+wordpress_web_server_package:
+  nginx: "nginx"
+  apache: "apache2"
+
+wordpress_db_packages:
+  mysql:
+    - "mysql-server"
+    - "mysql-client"
+    - "python3-pymysql"
+  mariadb:
+    - "mariadb-server"
+    - "mariadb-client"
+    - "python3-pymysql"
+
+wordpress_php_packages:
+  - "php{{ wordpress_php_version }}"
+  - "php{{ wordpress_php_version }}-fpm"
+  - "php{{ wordpress_php_version }}-mysql"
+  - "php{{ wordpress_php_version }}-opcache"
+  - "php{{ wordpress_php_version }}-gd"
+  - "php{{ wordpress_php_version }}-xml"
+  - "php{{ wordpress_php_version }}-mbstring"
+  - "php{{ wordpress_php_version }}-intl"
+  - "php{{ wordpress_php_version }}-soap"
+  - "php{{ wordpress_php_version }}-zip"
+  - "php{{ wordpress_php_version }}-bcmath"
+  - "php{{ wordpress_php_version }}-imagick"
+  - "php{{ wordpress_php_version }}-redis"
+  - "php{{ wordpress_php_version }}-memcached"
+  - "php{{ wordpress_php_version }}-curl"
+  - "php{{ wordpress_php_version }}-cli"
+  - "php{{ wordpress_php_version }}-common"
+
+wordpress_system_packages:
+  - "tar"
+  - "gzip"
+  - "unzip"
+  - "wget"
+  - "curl"
+  - "git"
+  - "rsync"
+  - "vim"
+  - "software-properties-common"
+  - "apt-transport-https"
+  - "ca-certificates"
+  - "gnupg"
+
+wordpress_redis_package: "redis-server"
+wordpress_memcached_package: "memcached"
+
+# Service names
+wordpress_web_server_service:
+  nginx: "nginx"
+  apache: "apache2"
+
+wordpress_db_service:
+  mysql: "mysql"
+  mariadb: "mariadb"
+
+wordpress_php_fpm_service: "php{{ wordpress_php_version }}-fpm"
+wordpress_redis_service: "redis-server"
+wordpress_memcached_service: "memcached"
+
+# Paths
+wordpress_php_ini_path: "/etc/php/{{ wordpress_php_version }}/fpm/php.ini"
+wordpress_php_fpm_conf_path: "/etc/php/{{ wordpress_php_version }}/fpm/php-fpm.conf"
+wordpress_php_fpm_pool_path: "/etc/php/{{ wordpress_php_version }}/fpm/pool.d/www.conf"
+wordpress_nginx_conf_path: "/etc/nginx"
+wordpress_apache_conf_path: "/etc/apache2"
+wordpress_nginx_sites_available: "{{ wordpress_nginx_conf_path }}/sites-available"
+wordpress_nginx_sites_enabled: "{{ wordpress_nginx_conf_path }}/sites-enabled"
+wordpress_apache_sites_available: "{{ wordpress_apache_conf_path }}/sites-available"
+wordpress_apache_sites_enabled: "{{ wordpress_apache_conf_path }}/sites-enabled"
+
+# PHP-FPM socket/listen
+wordpress_php_fpm_listen_debian: "/run/php/php{{ wordpress_php_version }}-fpm.sock"
+
+# Firewall
+wordpress_firewall_service: "ufw"
+wordpress_firewall_http_port: "80/tcp"
+wordpress_firewall_https_port: "443/tcp"
+
+# Repository configuration
+wordpress_ondrej_php_repo: "ppa:ondrej/php"
+wordpress_ondrej_nginx_repo: "ppa:ondrej/nginx-mainline"
+
+# System user defaults
+wordpress_php_fpm_user_debian: "www-data"
+wordpress_php_fpm_group_debian: "www-data"
+
+# Apache modules
+wordpress_apache_modules:
+  - "rewrite"
+  - "headers"
+  - "expires"
+  - "ssl"
+  - "http2"
+  - "proxy_fcgi"
+  - "setenvif"

@@ -1,0 +1,123 @@
+---
+# Main tasks file for WordPress Enterprise Role
+
+- name: Include OS-specific variables
+  ansible.builtin.include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+  tags:
+    - always
+
+- name: Validate configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - always
+    - wordpress
+    - wordpress:validate
+
+- name: Setup system prerequisites
+  ansible.builtin.include_tasks: prerequisites.yml
+  tags:
+    - wordpress
+    - wordpress:prerequisites
+
+- name: Configure repositories
+  ansible.builtin.include_tasks: repositories.yml
+  tags:
+    - wordpress
+    - wordpress:repositories
+
+- name: Install and configure database
+  ansible.builtin.include_tasks: database.yml
+  tags:
+    - wordpress
+    - wordpress:database
+
+- name: Install and configure PHP-FPM
+  ansible.builtin.include_tasks: php.yml
+  tags:
+    - wordpress
+    - wordpress:php
+
+- name: Install and configure web server
+  ansible.builtin.include_tasks: "webserver_{{ wordpress_web_server }}.yml"
+  tags:
+    - wordpress
+    - wordpress:webserver
+
+- name: Configure SSL/TLS
+  ansible.builtin.include_tasks: ssl.yml
+  when: wordpress_enable_ssl | bool
+  tags:
+    - wordpress
+    - wordpress:ssl
+
+- name: Install WordPress core
+  ansible.builtin.include_tasks: wordpress_install.yml
+  tags:
+    - wordpress
+    - wordpress:install
+
+- name: Configure WordPress
+  ansible.builtin.include_tasks: wordpress_configure.yml
+  tags:
+    - wordpress
+    - wordpress:configure
+
+- name: Install and configure caching
+  ansible.builtin.include_tasks: caching.yml
+  tags:
+    - wordpress
+    - wordpress:caching
+
+- name: Manage WordPress plugins
+  ansible.builtin.include_tasks: plugins.yml
+  tags:
+    - wordpress
+    - wordpress:plugins
+
+- name: Manage WordPress themes
+  ansible.builtin.include_tasks: themes.yml
+  tags:
+    - wordpress
+    - wordpress:themes
+
+- name: Configure backups
+  ansible.builtin.include_tasks: backups.yml
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress
+    - wordpress:backups
+
+- name: Configure monitoring and logging
+  ansible.builtin.include_tasks: monitoring.yml
+  tags:
+    - wordpress
+    - wordpress:monitoring
+
+- name: Configure firewall
+  ansible.builtin.include_tasks: firewall.yml
+  when: wordpress_configure_firewall | bool
+  tags:
+    - wordpress
+    - wordpress:firewall
+
+- name: Configure fail2ban
+  ansible.builtin.include_tasks: fail2ban.yml
+  when: wordpress_enable_fail2ban | bool
+  tags:
+    - wordpress
+    - wordpress:fail2ban
+
+- name: Security hardening
+  ansible.builtin.include_tasks: security.yml
+  tags:
+    - wordpress
+    - wordpress:security
+
+- name: Final verification
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - wordpress
+    - wordpress:verify

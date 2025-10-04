@@ -1,0 +1,195 @@
+---
+##
+# Microsoft Azure WordPress Deployment
+# Uses Azure Database for MySQL, Azure Cache for Redis, Azure Blob Storage, and Azure CDN
+##
+
+- name: Deploy WordPress on Microsoft Azure
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core
+    # ========================================================================
+    wordpress_version: "6.4.2"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "Azure-Powered WordPress"
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure
+    # ========================================================================
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+    wordpress_php_upload_max_filesize: "256M"
+
+    # ========================================================================
+    # Cloud Provider
+    # ========================================================================
+    wordpress_cloud_provider: "azure"
+    wordpress_azure_enabled: true
+    wordpress_azure_subscription_id: "{{ vault_azure_subscription_id }}"
+    wordpress_azure_resource_group: "wordpress-rg"
+
+    # ========================================================================
+    # Azure Database for MySQL
+    # ========================================================================
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_azure_db_enabled: true
+    wordpress_external_db_type: "azure_db"
+    wordpress_azure_db_server: "{{ vault_azure_db_server }}"
+    wordpress_external_db_host: "{{ vault_azure_db_server }}.mysql.database.azure.com"
+    wordpress_external_db_port: 3306
+    wordpress_external_db_name: "wordpress"
+    wordpress_external_db_user: "{{ vault_azure_db_user }}@{{ vault_azure_db_server }}"
+    wordpress_external_db_password: "{{ vault_azure_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+    wordpress_external_db_ssl_ca: "/etc/ssl/certs/BaltimoreCyberTrustRoot.crt.pem"
+
+    # ========================================================================
+    # Azure Cache for Redis
+    # ========================================================================
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+    wordpress_azure_redis_enabled: true
+    wordpress_azure_redis_hostname: "{{ vault_azure_redis_name }}.redis.cache.windows.net"
+    wordpress_azure_redis_port: 6380
+    wordpress_azure_redis_password: "{{ vault_azure_redis_password }}"
+    wordpress_azure_redis_ssl_enabled: true
+    wordpress_enable_object_cache: true
+
+    # ========================================================================
+    # Azure Blob Storage
+    # ========================================================================
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "azure_blob"
+    wordpress_azure_storage_enabled: true
+    wordpress_azure_storage_account: "{{ vault_azure_storage_account }}"
+    wordpress_azure_storage_key: "{{ vault_azure_storage_key }}"
+    wordpress_azure_storage_container: "wordpress-uploads"
+    wordpress_object_storage_bucket: "wordpress-uploads"
+    wordpress_object_storage_path_prefix: "wp-content/uploads"
+
+    # Azure CDN
+    wordpress_azure_cdn_enabled: true
+    wordpress_cdn_enabled: true
+    wordpress_cdn_provider: "azure"
+    wordpress_cdn_domain: "{{ vault_azure_storage_account }}.azureedge.net"
+    wordpress_cdn_ssl_enabled: true
+
+    # ========================================================================
+    # SSL/TLS
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+
+    # ========================================================================
+    # Email - SendGrid (Azure Marketplace)
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "sendgrid"
+    wordpress_smtp_host: "smtp.sendgrid.net"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "apikey"
+    wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_encryption: "tls"
+
+    # ========================================================================
+    # Performance Optimization
+    # ========================================================================
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "256"
+    wordpress_opcache_validate_timestamps: "0"
+
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+    wordpress_avif_enabled: true
+    wordpress_lazy_load_enabled: true
+
+    wordpress_http2_push_enabled: true
+
+    # ========================================================================
+    # Security
+    # ========================================================================
+    wordpress_enable_fail2ban: true
+    wordpress_configure_firewall: true
+    wordpress_disable_file_edit: true
+    wordpress_force_ssl_admin: true
+    wordpress_disallow_unfiltered_html: true
+
+    # Additional security headers
+    wordpress_additional_constants:
+      CONCATENATE_SCRIPTS: false
+      COMPRESS_SCRIPTS: false
+
+    # ========================================================================
+    # Backups to Azure Blob Storage
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+    wordpress_backup_to_cloud: true
+    wordpress_backup_cloud_provider: "azure_blob"
+    wordpress_backup_cloud_bucket: "wordpress-backups"
+
+    # ========================================================================
+    # Monitoring (Azure Monitor integration)
+    # ========================================================================
+    wordpress_enable_logging: true
+    wordpress_log_dir: "/var/log/wordpress"
+    wordpress_logrotate_enabled: true
+    wordpress_logrotate_frequency: "daily"
+    wordpress_logrotate_retention: 14
+
+    # ========================================================================
+    # Plugins
+    # ========================================================================
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+      - name: "windows-azure-storage"  # Azure Blob Storage plugin
+        version: "latest"
+        state: "present"
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+      - name: "wordpress-seo"
+        version: "latest"
+        state: "present"
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+      - name: "autoptimize"
+        version: "latest"
+        state: "present"
+      - name: "ewww-image-optimizer"
+        version: "latest"
+        state: "present"
+
+    # ========================================================================
+    # Themes
+    # ========================================================================
+    wordpress_themes:
+      - name: "generatepress"
+        version: "latest"
+        state: "present"
+        activate: true
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise

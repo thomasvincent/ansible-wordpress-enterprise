@@ -1,0 +1,150 @@
+---
+##
+# DigitalOcean Full Stack WordPress Deployment
+# Uses DO Managed Database, Managed Redis, and Spaces
+# Includes DO CDN integration
+##
+
+- name: Deploy WordPress on DigitalOcean Full Stack
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core
+    # ========================================================================
+    wordpress_version: "6.4.2"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "DigitalOcean Powered Blog"
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure
+    # ========================================================================
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+
+    # ========================================================================
+    # Cloud Provider
+    # ========================================================================
+    wordpress_cloud_provider: "digitalocean"
+    wordpress_digitalocean_enabled: true
+    wordpress_digitalocean_token: "{{ vault_do_token }}"
+
+    # ========================================================================
+    # DigitalOcean Managed Database (MySQL)
+    # ========================================================================
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_external_db_type: "mysql"
+    wordpress_external_db_host: "{{ vault_do_db_host }}"
+    wordpress_external_db_port: 25060
+    wordpress_external_db_name: "wordpress"
+    wordpress_external_db_user: "{{ vault_do_db_user }}"
+    wordpress_external_db_password: "{{ vault_do_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+    wordpress_external_db_ssl_ca: "/etc/mysql/ssl/ca-certificate.crt"
+
+    # ========================================================================
+    # DigitalOcean Managed Redis
+    # ========================================================================
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+    wordpress_do_redis_enabled: true
+    wordpress_do_redis_host: "{{ vault_do_redis_host }}"
+    wordpress_do_redis_port: 25061
+    wordpress_do_redis_password: "{{ vault_do_redis_password }}"
+    wordpress_enable_object_cache: true
+
+    # ========================================================================
+    # DigitalOcean Spaces (S3-Compatible Object Storage)
+    # ========================================================================
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "spaces"
+    wordpress_digitalocean_spaces_enabled: true
+    wordpress_digitalocean_spaces_key: "{{ vault_do_spaces_key }}"
+    wordpress_digitalocean_spaces_secret: "{{ vault_do_spaces_secret }}"
+    wordpress_digitalocean_spaces_bucket: "wordpress-media"
+    wordpress_digitalocean_spaces_region: "nyc3"
+    wordpress_digitalocean_spaces_endpoint: "https://nyc3.digitaloceanspaces.com"
+
+    # DigitalOcean CDN
+    wordpress_digitalocean_cdn_enabled: true
+    wordpress_cdn_enabled: true
+    wordpress_cdn_provider: "digitalocean"
+    wordpress_cdn_domain: "wordpress-media.nyc3.cdn.digitaloceanspaces.com"
+
+    # ========================================================================
+    # SSL/TLS
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+
+    # ========================================================================
+    # Email - SendGrid
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "sendgrid"
+    wordpress_smtp_host: "smtp.sendgrid.net"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "apikey"
+    wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_encryption: "tls"
+
+    # ========================================================================
+    # Performance
+    # ========================================================================
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "256"
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+
+    # ========================================================================
+    # Security
+    # ========================================================================
+    wordpress_enable_fail2ban: true
+    wordpress_configure_firewall: true
+    wordpress_disable_file_edit: true
+    wordpress_force_ssl_admin: true
+
+    # ========================================================================
+    # Backups to Spaces
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+    wordpress_backup_to_cloud: true
+    wordpress_backup_cloud_provider: "spaces"
+    wordpress_backup_cloud_bucket: "wordpress-backups"
+
+    # ========================================================================
+    # Plugins
+    # ========================================================================
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+      - name: "amazon-s3-and-cloudfront"  # Works with Spaces
+        version: "latest"
+        state: "present"
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise

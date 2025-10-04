@@ -1,0 +1,56 @@
+---
+# Repository configuration for WordPress dependencies
+
+- name: Configure repositories (RedHat family)
+  when: ansible_os_family == "RedHat"
+  block:
+    - name: Install EPEL repository
+      ansible.builtin.package:
+        name: "{{ wordpress_epel_repo_url }}"
+        state: present
+        disable_gpg_check: true
+      when: wordpress_enable_epel | bool
+
+    - name: Install Remi repository
+      ansible.builtin.package:
+        name: "{{ wordpress_remi_repo_url }}"
+        state: present
+        disable_gpg_check: true
+      when: wordpress_enable_remi | bool
+
+    - name: Enable Remi PHP {{ wordpress_php_version }} module
+      ansible.builtin.command:
+        cmd: "dnf module enable php:remi-{{ wordpress_php_version }} -y"
+      args:
+        warn: false
+      changed_when: false
+      when:
+        - wordpress_enable_remi | bool
+        - ansible_distribution_major_version | int >= 8
+
+- name: Configure repositories (Debian family)
+  when: ansible_os_family == "Debian"
+  block:
+    - name: Add Ondrej PHP PPA key
+      ansible.builtin.apt_key:
+        keyserver: keyserver.ubuntu.com
+        id: 4F4EA0AAE5267A6C
+        state: present
+
+    - name: Add Ondrej PHP PPA
+      ansible.builtin.apt_repository:
+        repo: "{{ wordpress_ondrej_php_repo }}"
+        state: present
+        update_cache: true
+
+    - name: Add Nginx mainline PPA (optional)
+      ansible.builtin.apt_repository:
+        repo: "{{ wordpress_ondrej_nginx_repo }}"
+        state: present
+        update_cache: true
+      when: wordpress_web_server == "nginx"
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600

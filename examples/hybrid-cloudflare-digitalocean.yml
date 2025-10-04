@@ -1,0 +1,217 @@
+---
+##
+# Hybrid Cloudflare + DigitalOcean WordPress Deployment
+# Uses Cloudflare for DNS/CDN/DDoS and DigitalOcean for infrastructure
+# Best of both worlds: Cloudflare edge network + DO managed services
+##
+
+- name: Deploy WordPress with Cloudflare + DigitalOcean Hybrid
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    # ========================================================================
+    # WordPress Core
+    # ========================================================================
+    wordpress_version: "6.4.2"
+    wordpress_site_url: "https://blog.example.com"
+    wordpress_site_title: "Hybrid Cloud WordPress"
+    wordpress_admin_user: "{{ vault_wp_admin_user }}"
+    wordpress_admin_password: "{{ vault_wp_admin_password }}"
+    wordpress_admin_email: "admin@example.com"
+
+    # ========================================================================
+    # Infrastructure
+    # ========================================================================
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_php_memory_limit: "512M"
+
+    # ========================================================================
+    # Primary Cloud Provider: Cloudflare (Edge)
+    # ========================================================================
+    wordpress_cloud_provider: "cloudflare"
+    wordpress_cloudflare_enabled: true
+    wordpress_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
+    wordpress_cloudflare_zone_id: "{{ vault_cloudflare_zone_id }}"
+    wordpress_cloudflare_email: "cloudflare@example.com"
+
+    # Cloudflare DNS Management
+    wordpress_cloudflare_dns_records:
+      - name: "blog.example.com"
+        type: "A"
+        value: "{{ ansible_default_ipv4.address }}"
+        proxied: true
+        ttl: 1
+
+      - name: "www.blog.example.com"
+        type: "CNAME"
+        value: "blog.example.com"
+        proxied: true
+        ttl: 1
+
+    # Cloudflare CDN & Security
+    wordpress_cloudflare_cdn_enabled: true
+    wordpress_cloudflare_cache_ttl: 14400
+    wordpress_cloudflare_purge_on_update: true
+
+    # ========================================================================
+    # Secondary Cloud Provider: DigitalOcean (Infrastructure)
+    # ========================================================================
+    wordpress_digitalocean_enabled: true
+    wordpress_digitalocean_token: "{{ vault_do_token }}"
+
+    # DO Managed Database (MySQL)
+    wordpress_use_external_db: true
+    wordpress_db_engine: "mysql"
+    wordpress_external_db_host: "{{ vault_do_db_host }}"
+    wordpress_external_db_port: 25060
+    wordpress_external_db_name: "wordpress"
+    wordpress_external_db_user: "{{ vault_do_db_user }}"
+    wordpress_external_db_password: "{{ vault_do_db_password }}"
+    wordpress_external_db_ssl_enabled: true
+
+    # DO Managed Redis
+    wordpress_use_external_cache: true
+    wordpress_enable_redis: true
+    wordpress_do_redis_enabled: true
+    wordpress_do_redis_host: "{{ vault_do_redis_host }}"
+    wordpress_do_redis_port: 25061
+    wordpress_do_redis_password: "{{ vault_do_redis_password }}"
+    wordpress_enable_object_cache: true
+
+    # DO Spaces for Media Storage
+    wordpress_object_storage_enabled: true
+    wordpress_object_storage_provider: "spaces"
+    wordpress_digitalocean_spaces_enabled: true
+    wordpress_digitalocean_spaces_key: "{{ vault_do_spaces_key }}"
+    wordpress_digitalocean_spaces_secret: "{{ vault_do_spaces_secret }}"
+    wordpress_digitalocean_spaces_bucket: "wordpress-media"
+    wordpress_digitalocean_spaces_region: "nyc3"
+
+    # ========================================================================
+    # SSL/TLS (Cloudflare + Let's Encrypt)
+    # ========================================================================
+    wordpress_enable_ssl: true
+    wordpress_use_letsencrypt: true
+    wordpress_letsencrypt_email: "ssl@example.com"
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+    # Cloudflare handles edge SSL, origin uses Let's Encrypt
+
+    # ========================================================================
+    # Email - SendGrid
+    # ========================================================================
+    wordpress_smtp_enabled: true
+    wordpress_smtp_provider: "sendgrid"
+    wordpress_smtp_host: "smtp.sendgrid.net"
+    wordpress_smtp_port: 587
+    wordpress_smtp_user: "apikey"
+    wordpress_smtp_password: "{{ vault_sendgrid_api_key }}"
+    wordpress_smtp_from_email: "noreply@example.com"
+    wordpress_smtp_encryption: "tls"
+
+    # ========================================================================
+    # Performance Optimization
+    # ========================================================================
+    # Cloudflare caching at edge
+    # Redis for object cache
+    # Opcache for PHP
+    wordpress_opcache_enable: true
+    wordpress_opcache_memory: "256"
+    wordpress_opcache_validate_timestamps: "0"
+
+    wordpress_image_optimization_enabled: true
+    wordpress_webp_enabled: true
+    wordpress_lazy_load_enabled: true
+
+    wordpress_http2_push_enabled: true
+
+    # ========================================================================
+    # Security (Multi-layered)
+    # ========================================================================
+    # Layer 1: Cloudflare DDoS protection, WAF, Bot management
+    # Layer 2: Server-level security
+    wordpress_enable_fail2ban: true
+    wordpress_configure_firewall: true
+    wordpress_disable_file_edit: true
+    wordpress_force_ssl_admin: true
+
+    # ========================================================================
+    # Backups to DO Spaces
+    # ========================================================================
+    wordpress_enable_backups: true
+    wordpress_backup_dir: "/var/backups/wordpress"
+    wordpress_backup_retention_days: 30
+    wordpress_backup_to_cloud: true
+    wordpress_backup_cloud_provider: "spaces"
+    wordpress_backup_cloud_bucket: "wordpress-backups"
+
+    # ========================================================================
+    # Monitoring & Logging
+    # ========================================================================
+    wordpress_enable_logging: true
+    wordpress_log_dir: "/var/log/wordpress"
+    wordpress_logrotate_enabled: true
+
+    # ========================================================================
+    # Plugins (Optimized for hybrid setup)
+    # ========================================================================
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+
+      - name: "redis-cache"
+        version: "latest"
+        state: "present"
+
+      - name: "amazon-s3-and-cloudfront"  # Works with DO Spaces
+        version: "latest"
+        state: "present"
+
+      - name: "wp-cloudflare-page-cache"  # Cloudflare integration
+        version: "latest"
+        state: "present"
+
+      - name: "wp-mail-smtp"
+        version: "latest"
+        state: "present"
+
+      - name: "wordpress-seo"
+        version: "latest"
+        state: "present"
+
+      - name: "updraftplus"
+        version: "latest"
+        state: "present"
+
+      - name: "autoptimize"
+        version: "latest"
+        state: "present"
+
+    wordpress_themes:
+      - name: "astra"
+        version: "latest"
+        state: "present"
+        activate: true
+
+  roles:
+    - role: thomasvincent.wordpress_enterprise
+
+  post_tasks:
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Hybrid Cloud Deployment Complete ==="
+          - "Edge Network: Cloudflare (DNS, CDN, DDoS, WAF)"
+          - "Infrastructure: DigitalOcean (Droplet)"
+          - "Database: DigitalOcean Managed MySQL"
+          - "Cache: DigitalOcean Managed Redis"
+          - "Storage: DigitalOcean Spaces"
+          - "Email: SendGrid"
+          - "Site URL: {{ wordpress_site_url }}"
+          - "Benefits: Global CDN + Managed Services + Cost Optimization"

@@ -1,0 +1,98 @@
+---
+# RHEL/CentOS/Rocky/AlmaLinux specific variables
+
+# Package names
+wordpress_web_server_package:
+  nginx: "nginx"
+  apache: "httpd"
+
+wordpress_db_packages:
+  mysql:
+    - "mysql-server"
+    - "mysql"
+    - "python3-PyMySQL"
+  mariadb:
+    - "mariadb-server"
+    - "mariadb"
+    - "python3-PyMySQL"
+
+wordpress_php_packages:
+  - "php{{ wordpress_php_version }}"
+  - "php{{ wordpress_php_version }}-fpm"
+  - "php{{ wordpress_php_version }}-mysqlnd"
+  - "php{{ wordpress_php_version }}-opcache"
+  - "php{{ wordpress_php_version }}-gd"
+  - "php{{ wordpress_php_version }}-xml"
+  - "php{{ wordpress_php_version }}-mbstring"
+  - "php{{ wordpress_php_version }}-json"
+  - "php{{ wordpress_php_version }}-intl"
+  - "php{{ wordpress_php_version }}-soap"
+  - "php{{ wordpress_php_version }}-zip"
+  - "php{{ wordpress_php_version }}-bcmath"
+  - "php{{ wordpress_php_version }}-pecl-imagick"
+  - "php{{ wordpress_php_version }}-pecl-redis"
+  - "php{{ wordpress_php_version }}-pecl-memcached"
+
+wordpress_system_packages:
+  - "tar"
+  - "gzip"
+  - "unzip"
+  - "wget"
+  - "curl"
+  - "git"
+  - "rsync"
+  - "vim"
+
+wordpress_redis_package: "redis"
+wordpress_memcached_package: "memcached"
+
+# Service names
+wordpress_web_server_service:
+  nginx: "nginx"
+  apache: "httpd"
+
+wordpress_db_service:
+  mysql: "mysqld"
+  mariadb: "mariadb"
+
+wordpress_php_fpm_service: "php{{ wordpress_php_version }}-fpm"
+wordpress_redis_service: "redis"
+wordpress_memcached_service: "memcached"
+
+# Paths
+wordpress_php_ini_path: "/etc/php/{{ wordpress_php_version }}/fpm/php.ini"
+wordpress_php_fpm_conf_path: "/etc/php/{{ wordpress_php_version }}/fpm/php-fpm.conf"
+wordpress_php_fpm_pool_path: "/etc/php/{{ wordpress_php_version }}/fpm/pool.d/www.conf"
+wordpress_nginx_conf_path: "/etc/nginx"
+wordpress_apache_conf_path: "/etc/httpd"
+wordpress_nginx_sites_available: "{{ wordpress_nginx_conf_path }}/conf.d"
+wordpress_nginx_sites_enabled: "{{ wordpress_nginx_conf_path }}/conf.d"
+wordpress_apache_sites_available: "{{ wordpress_apache_conf_path }}/conf.d"
+wordpress_apache_sites_enabled: "{{ wordpress_apache_conf_path }}/conf.d"
+
+# PHP-FPM socket/listen
+wordpress_php_fpm_listen_rhel: "/var/run/php-fpm/www.sock"
+
+# Firewall
+wordpress_firewall_service: "firewalld"
+wordpress_firewall_http_service: "http"
+wordpress_firewall_https_service: "https"
+
+# SELinux
+wordpress_selinux_enabled: "{{ ansible_selinux.status == 'enabled' }}"
+wordpress_selinux_booleans:
+  - httpd_can_network_connect
+  - httpd_can_network_connect_db
+  - httpd_can_sendmail
+  - httpd_unified
+
+# Repository configuration
+wordpress_enable_epel: true
+wordpress_enable_remi: true
+
+wordpress_remi_repo_url: "https://rpms.remirepo.net/enterprise/remi-release-{{ ansible_distribution_major_version }}.rpm"
+wordpress_epel_repo_url: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+
+# System user defaults
+wordpress_php_fpm_user_rhel: "nginx"
+wordpress_php_fpm_group_rhel: "nginx"
