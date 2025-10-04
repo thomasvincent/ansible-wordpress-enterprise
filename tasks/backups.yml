@@ -1,0 +1,319 @@
+---
+# Backup configuration tasks
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ wordpress_backup_dir }}"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:directories
+
+- name: Create backup scripts directory
+  ansible.builtin.file:
+    path: "{{ wordpress_backup_dir }}/scripts"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:directories
+
+- name: Create backup logs directory
+  ansible.builtin.file:
+    path: "{{ wordpress_backup_dir }}/logs"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:directories
+
+- name: Install backup dependencies
+  ansible.builtin.package:
+    name:
+      - rsync
+      - gzip
+      - tar
+      - "{{ 'mysql-client' if ansible_os_family == 'Debian' else 'mysql' }}"
+    state: present
+  tags:
+    - wordpress:backups
+    - wordpress:dependencies
+
+- name: Create WordPress files backup script
+  ansible.builtin.template:
+    src: backup-files.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/backup-files.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:scripts
+
+- name: Create WordPress database backup script
+  ansible.builtin.template:
+    src: backup-database.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/backup-database.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:scripts
+
+- name: Create full WordPress backup script
+  ansible.builtin.template:
+    src: backup-full.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/backup-full.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:scripts
+
+- name: Create backup cleanup script
+  ansible.builtin.template:
+    src: backup-cleanup.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/backup-cleanup.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:scripts
+
+- name: Create backup restoration script
+  ansible.builtin.template:
+    src: restore-backup.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/restore-backup.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:scripts
+
+- name: Create MySQL configuration file for backups
+  ansible.builtin.template:
+    src: mysql-backup.cnf.j2
+    dest: "{{ wordpress_backup_dir }}/.my.cnf"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0600'
+  tags:
+    - wordpress:backups
+    - wordpress:mysql
+
+- name: Schedule automated database backups
+  ansible.builtin.cron:
+    name: "WordPress Database Backup"
+    minute: "{{ wordpress_backup_schedule_minute }}"
+    hour: "{{ wordpress_backup_schedule_hour }}"
+    job: "{{ wordpress_backup_dir }}/scripts/backup-database.sh >> {{ wordpress_backup_dir }}/logs/backup-database.log 2>&1"
+    user: "{{ wordpress_system_user }}"
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:cron
+
+- name: Schedule automated files backups
+  ansible.builtin.cron:
+    name: "WordPress Files Backup"
+    minute: "{{ (wordpress_backup_schedule_minute | int) + 30 }}"
+    hour: "{{ wordpress_backup_schedule_hour }}"
+    weekday: "0"
+    job: "{{ wordpress_backup_dir }}/scripts/backup-files.sh >> {{ wordpress_backup_dir }}/logs/backup-files.log 2>&1"
+    user: "{{ wordpress_system_user }}"
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:cron
+
+- name: Schedule automated backup cleanup
+  ansible.builtin.cron:
+    name: "WordPress Backup Cleanup"
+    minute: "0"
+    hour: "4"
+    job: "{{ wordpress_backup_dir }}/scripts/backup-cleanup.sh >> {{ wordpress_backup_dir }}/logs/backup-cleanup.log 2>&1"
+    user: "{{ wordpress_system_user }}"
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:cron
+
+- name: Configure logrotate for backup logs
+  ansible.builtin.template:
+    src: logrotate-backups.j2
+    dest: /etc/logrotate.d/wordpress-backups
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_logrotate_enabled | bool
+  tags:
+    - wordpress:backups
+    - wordpress:logrotate
+
+- name: Create backup monitoring script
+  ansible.builtin.template:
+    src: backup-monitor.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/backup-monitor.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  tags:
+    - wordpress:backups
+    - wordpress:monitoring
+
+- name: Schedule backup monitoring
+  ansible.builtin.cron:
+    name: "WordPress Backup Monitoring"
+    minute: "0"
+    hour: "8"
+    job: "{{ wordpress_backup_dir }}/scripts/backup-monitor.sh >> {{ wordpress_backup_dir }}/logs/backup-monitor.log 2>&1"
+    user: "{{ wordpress_system_user }}"
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:monitoring
+
+- name: Configure WordPress backup constants
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    regexp: "define\\s*\\(\\s*['\"]{{ item.key }}['\"]"
+    line: "define('{{ item.key }}', '{{ item.value }}');"
+    insertbefore: "/* That's all, stop editing!"
+  loop:
+    - { key: 'WP_BACKUP_DIR', value: "{{ wordpress_backup_dir }}" }
+    - { key: 'WP_BACKUP_RETENTION_DAYS', value: "{{ wordpress_backup_retention_days }}" }
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:backups
+    - wordpress:config
+
+# Cloud Storage Integration Tasks
+
+- name: Configure AWS S3 backup integration
+  ansible.builtin.template:
+    src: s3-sync.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/s3-sync.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  when:
+    - wordpress_s3_enabled | bool
+    - wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:s3
+
+- name: Install AWS CLI for S3 backups
+  ansible.builtin.package:
+    name: awscli
+    state: present
+  when:
+    - wordpress_s3_enabled | bool
+    - wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:s3
+
+- name: Configure DigitalOcean Spaces backup integration
+  ansible.builtin.template:
+    src: spaces-sync.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/spaces-sync.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  when:
+    - wordpress_digitalocean_spaces_enabled | bool
+    - wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:digitalocean
+
+- name: Configure Google Cloud Storage backup integration
+  ansible.builtin.template:
+    src: gcs-sync.sh.j2
+    dest: "{{ wordpress_backup_dir }}/scripts/gcs-sync.sh"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0750'
+  when:
+    - wordpress_gcp_storage_enabled | bool
+    - wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:gcp
+
+- name: Install Google Cloud SDK for GCS backups
+  ansible.builtin.include_tasks: install-gcloud-sdk.yml
+  when:
+    - wordpress_gcp_storage_enabled | bool
+    - wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:gcp
+
+- name: Schedule cloud backup sync (daily)
+  ansible.builtin.cron:
+    name: "WordPress Cloud Backup Sync"
+    minute: "0"
+    hour: "3"
+    job: |
+      {% if wordpress_s3_enabled | bool %}
+      {{ wordpress_backup_dir }}/scripts/s3-sync.sh >> {{ wordpress_backup_dir }}/logs/s3-sync.log 2>&1
+      {% elif wordpress_digitalocean_spaces_enabled | bool %}
+      {{ wordpress_backup_dir }}/scripts/spaces-sync.sh >> {{ wordpress_backup_dir }}/logs/spaces-sync.log 2>&1
+      {% elif wordpress_gcp_storage_enabled | bool %}
+      {{ wordpress_backup_dir }}/scripts/gcs-sync.sh >> {{ wordpress_backup_dir }}/logs/gcs-sync.log 2>&1
+      {% endif %}
+    user: "{{ wordpress_system_user }}"
+  when:
+    - wordpress_enable_backups | bool
+    - (wordpress_s3_enabled | bool) or (wordpress_digitalocean_spaces_enabled | bool) or (wordpress_gcp_storage_enabled | bool)
+  tags:
+    - wordpress:backups
+    - wordpress:cloud
+
+- name: Test database backup
+  ansible.builtin.command:
+    cmd: "{{ wordpress_backup_dir }}/scripts/backup-database.sh"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: test_db_backup
+  changed_when: false
+  failed_when: test_db_backup.rc != 0
+  when: wordpress_enable_backups | bool
+  tags:
+    - wordpress:backups
+    - wordpress:test
+
+- name: Verify backup directory structure
+  ansible.builtin.find:
+    paths: "{{ wordpress_backup_dir }}"
+    file_type: directory
+  register: backup_dirs
+  tags:
+    - wordpress:backups
+    - wordpress:verify
+
+- name: Display backup configuration summary
+  ansible.builtin.debug:
+    msg:
+      - "Backup directory: {{ wordpress_backup_dir }}"
+      - "Retention days: {{ wordpress_backup_retention_days }}"
+      - "Backup schedule: {{ wordpress_backup_schedule_hour }}:{{ wordpress_backup_schedule_minute }}"
+      - "S3 enabled: {{ wordpress_s3_enabled | bool }}"
+      - "Spaces enabled: {{ wordpress_digitalocean_spaces_enabled | bool }}"
+      - "GCS enabled: {{ wordpress_gcp_storage_enabled | bool }}"
+  tags:
+    - wordpress:backups
+    - wordpress:verify

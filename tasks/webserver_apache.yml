@@ -1,0 +1,713 @@
+---
+# Apache-specific tasks
+
+- name: Install Apache and required modules
+  ansible.builtin.package:
+    name: "{{ wordpress_apache_packages }}"
+    state: present
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Remove default Apache configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apache2/sites-enabled/000-default.conf
+    - /etc/apache2/sites-available/000-default.conf
+    - /etc/httpd/conf.d/welcome.conf
+    - /var/www/html/index.html
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Create Apache configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/apache2/sites-available
+    - /etc/apache2/sites-enabled
+    - /etc/apache2/conf-available
+    - /etc/apache2/conf-enabled
+    - /etc/httpd/sites-available
+    - /etc/httpd/sites-enabled
+    - /etc/httpd/conf.d
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Configure main Apache settings
+  ansible.builtin.template:
+    src: "{{ 'apache2.conf.j2' if ansible_os_family == 'Debian' else 'httpd.conf.j2' }}"
+    dest: "{{ '/etc/apache2/apache2.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf/httpd.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Enable required Apache modules
+  ansible.builtin.apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - rewrite
+    - headers
+    - expires
+    - deflate
+    - ssl
+    - security2
+    - evasive24
+    - remoteip
+    - status
+    - info
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Enable required Apache modules (RHEL/CentOS)
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: "^#?LoadModule {{ item.module }}"
+    line: "LoadModule {{ item.module }} {{ item.path }}"
+    backup: true
+  loop:
+    - { module: 'rewrite_module', path: 'modules/mod_rewrite.so' }
+    - { module: 'headers_module', path: 'modules/mod_headers.so' }
+    - { module: 'expires_module', path: 'modules/mod_expires.so' }
+    - { module: 'deflate_module', path: 'modules/mod_deflate.so' }
+    - { module: 'ssl_module', path: 'modules/mod_ssl.so' }
+    - { module: 'remoteip_module', path: 'modules/mod_remoteip.so' }
+    - { module: 'status_module', path: 'modules/mod_status.so' }
+    - { module: 'info_module', path: 'modules/mod_info.so' }
+  when: ansible_os_family == "RedHat"
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Configure Apache security settings
+  ansible.builtin.template:
+    src: apache-security.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/security.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/security.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Enable Apache security configuration
+  ansible.builtin.command:
+    cmd: a2enconf security
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Configure Apache performance settings
+  ansible.builtin.template:
+    src: apache-performance.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/performance.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/performance.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Enable Apache performance configuration
+  ansible.builtin.command:
+    cmd: a2enconf performance
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Configure Apache SSL settings
+  ansible.builtin.template:
+    src: apache-ssl.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/ssl-params.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/ssl-params.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_enable_ssl | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:ssl
+
+- name: Enable Apache SSL configuration
+  ansible.builtin.command:
+    cmd: a2enconf ssl-params
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_enable_ssl | bool
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:ssl
+
+- name: Configure Apache compression
+  ansible.builtin.template:
+    src: apache-compression.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/compression.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/compression.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Enable Apache compression configuration
+  ansible.builtin.command:
+    cmd: a2enconf compression
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Configure Apache caching
+  ansible.builtin.template:
+    src: apache-cache.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/cache.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/cache.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Enable Apache caching configuration
+  ansible.builtin.command:
+    cmd: a2enconf cache
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Configure Apache WordPress-specific settings
+  ansible.builtin.template:
+    src: apache-wordpress.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/wordpress.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/wordpress.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Enable Apache WordPress configuration
+  ansible.builtin.command:
+    cmd: a2enconf wordpress
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Configure Apache rate limiting (mod_evasive)
+  ansible.builtin.template:
+    src: apache-rate-limit.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/rate-limit.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/rate-limit.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Enable Apache rate limiting configuration
+  ansible.builtin.command:
+    cmd: a2enconf rate-limit
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Create Apache virtual host configuration (HTTP)
+  ansible.builtin.template:
+    src: apache-vhost-http.conf.j2
+    dest: "{{ '/etc/apache2/sites-available' if ansible_os_family == 'Debian' else '/etc/httpd/sites-available' }}/{{ wordpress_server_name }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Create Apache virtual host configuration (HTTPS)
+  ansible.builtin.template:
+    src: apache-vhost-https.conf.j2
+    dest: "{{ '/etc/apache2/sites-available' if ansible_os_family == 'Debian' else '/etc/httpd/sites-available' }}/{{ wordpress_server_name }}-ssl.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_enable_ssl | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:ssl
+
+- name: Enable Apache virtual host (HTTP)
+  ansible.builtin.command:
+    cmd: "a2ensite {{ wordpress_server_name }}"
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Enable Apache virtual host (HTTPS)
+  ansible.builtin.command:
+    cmd: "a2ensite {{ wordpress_server_name }}-ssl"
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_enable_ssl | bool
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:ssl
+
+- name: Create symlinks for virtual hosts (RHEL/CentOS)
+  ansible.builtin.file:
+    src: "{{ '/etc/httpd/sites-available/' + item }}"
+    dest: "{{ '/etc/httpd/sites-enabled/' + item }}"
+    state: link
+  loop:
+    - "{{ wordpress_server_name }}.conf"
+    - "{{ wordpress_server_name }}-ssl.conf"
+  when:
+    - ansible_os_family == "RedHat"
+    - (item != wordpress_server_name + '-ssl.conf') or (wordpress_enable_ssl | bool)
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Configure Apache for WordPress multisite (if enabled)
+  ansible.builtin.template:
+    src: apache-multisite.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/multisite.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/multisite.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_multisite_enabled | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:multisite
+
+- name: Enable Apache multisite configuration
+  ansible.builtin.command:
+    cmd: a2enconf multisite
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_multisite_enabled | bool
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:multisite
+
+- name: Configure Apache status page
+  ansible.builtin.template:
+    src: apache-status.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/status.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/status.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:monitoring
+
+- name: Enable Apache status configuration
+  ansible.builtin.command:
+    cmd: a2enconf status
+  when: ansible_os_family == "Debian"
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:monitoring
+
+- name: Configure Apache real IP handling (for load balancers/CDN)
+  ansible.builtin.template:
+    src: apache-real-ip.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/real-ip.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/real-ip.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_ha_enabled | bool or wordpress_enable_cdn | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:loadbalancer
+
+- name: Enable Apache real IP configuration
+  ansible.builtin.command:
+    cmd: a2enconf real-ip
+  when:
+    - ansible_os_family == "Debian"
+    - (wordpress_ha_enabled | bool or wordpress_enable_cdn | bool)
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:loadbalancer
+
+- name: Configure Apache logging
+  ansible.builtin.template:
+    src: apache-logging.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/logging.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/logging.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_enable_logging | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:logging
+
+- name: Enable Apache logging configuration
+  ansible.builtin.command:
+    cmd: a2enconf logging
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_enable_logging | bool
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:logging
+
+- name: Create Apache log directories
+  ansible.builtin.file:
+    path: "{{ item | dirname }}"
+    state: directory
+    owner: "{{ wordpress_apache_user }}"
+    group: "{{ wordpress_apache_group }}"
+    mode: '0755'
+  loop:
+    - "{{ wordpress_access_log }}"
+    - "{{ wordpress_error_log }}"
+  when: wordpress_enable_logging | bool
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:logging
+
+- name: Configure Apache for HTTP/2
+  ansible.builtin.template:
+    src: apache-http2.conf.j2
+    dest: "{{ '/etc/apache2/conf-available/http2.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/http2.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_http2_push_enabled | bool
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Enable Apache HTTP/2 configuration
+  ansible.builtin.command:
+    cmd: a2enconf http2
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_http2_push_enabled | bool
+  notify: reload apache
+  changed_when: false
+  failed_when: false
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Install ModSecurity WAF
+  ansible.builtin.package:
+    name: "{{ 'libapache2-mod-security2' if ansible_os_family == 'Debian' else 'mod_security' }}"
+    state: present
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Configure ModSecurity
+  ansible.builtin.template:
+    src: modsecurity.conf.j2
+    dest: "{{ '/etc/modsecurity/modsecurity.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.d/mod_security.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Download OWASP ModSecurity Core Rule Set
+  ansible.builtin.git:
+    repo: https://github.com/coreruleset/coreruleset.git
+    dest: /opt/owasp-modsecurity-crs
+    version: v3.3/master
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Configure OWASP Core Rule Set
+  ansible.builtin.template:
+    src: crs-setup.conf.j2
+    dest: /opt/owasp-modsecurity-crs/crs-setup.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Create maintenance page
+  ansible.builtin.template:
+    src: maintenance.html.j2
+    dest: "{{ wordpress_install_dir }}/maintenance.html"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:maintenance
+
+- name: Configure Apache worker MPM settings
+  ansible.builtin.template:
+    src: apache-mpm.conf.j2
+    dest: "{{ '/etc/apache2/mods-available/mpm_prefork.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf.modules.d/00-mpm.conf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Create Apache monitoring script
+  ansible.builtin.template:
+    src: apache-monitor.sh.j2
+    dest: /usr/local/bin/apache-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:monitoring
+
+- name: Schedule Apache monitoring
+  ansible.builtin.cron:
+    name: "Apache Monitor"
+    minute: "*/5"
+    job: "/usr/local/bin/apache-monitor.sh >> /var/log/apache-monitor.log 2>&1"
+    user: root
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:monitoring
+
+- name: Configure Apache logrotate
+  ansible.builtin.template:
+    src: logrotate-apache.j2
+    dest: /etc/logrotate.d/apache-wordpress
+    owner: root
+    group: root
+    mode: '0644'
+  when: wordpress_logrotate_enabled | bool
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:logging
+
+- name: Create Apache tuning script
+  ansible.builtin.template:
+    src: apache-tuning.sh.j2
+    dest: /usr/local/bin/apache-tuning.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:performance
+
+- name: Create Apache backup script
+  ansible.builtin.template:
+    src: apache-backup.sh.j2
+    dest: /usr/local/bin/apache-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:backup
+
+- name: Schedule daily Apache configuration backup
+  ansible.builtin.cron:
+    name: "Apache Configuration Backup"
+    minute: "0"
+    hour: "2"
+    job: "/usr/local/bin/apache-backup.sh >> /var/log/apache-backup.log 2>&1"
+    user: root
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:backup
+
+- name: Test Apache configuration
+  ansible.builtin.command:
+    cmd: "{{ 'apache2ctl configtest' if ansible_os_family == 'Debian' else 'httpd -t' }}"
+  register: apache_config_test
+  changed_when: false
+  failed_when: apache_config_test.rc != 0
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:test
+
+- name: Enable and start Apache service
+  ansible.builtin.systemd:
+    name: "{{ 'apache2' if ansible_os_family == 'Debian' else 'httpd' }}"
+    state: started
+    enabled: true
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Create Apache virtual host include for sites-enabled (RHEL/CentOS)
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    line: "IncludeOptional sites-enabled/*.conf"
+    insertafter: "^IncludeOptional conf.d/"
+  when: ansible_os_family == "RedHat"
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+
+- name: Disable Apache default server signature
+  ansible.builtin.lineinfile:
+    path: "{{ '/etc/apache2/conf-available/security.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf/httpd.conf' }}"
+    regexp: "^ServerTokens"
+    line: "ServerTokens Prod"
+    backup: true
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Configure Apache server signature
+  ansible.builtin.lineinfile:
+    path: "{{ '/etc/apache2/conf-available/security.conf' if ansible_os_family == 'Debian' else '/etc/httpd/conf/httpd.conf' }}"
+    regexp: "^ServerSignature"
+    line: "ServerSignature Off"
+    backup: true
+  notify: reload apache
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:security
+
+- name: Display Apache configuration summary
+  ansible.builtin.debug:
+    msg:
+      - "Apache configuration completed successfully"
+      - "Virtual host: {{ wordpress_server_name }}"
+      - "Document root: {{ wordpress_install_dir }}"
+      - "PHP-FPM integration: ENABLED"
+      - "SSL enabled: {{ wordpress_enable_ssl | bool }}"
+      - "HTTP/2 enabled: {{ wordpress_http2_push_enabled | bool }}"
+      - "ModSecurity WAF: ENABLED"
+      - "Compression: ENABLED"
+      - "Caching: ENABLED"
+      - "Rate limiting: ENABLED"
+      - "Security headers: ENABLED"
+      - "Configuration test: {{ 'PASSED' if apache_config_test.rc == 0 else 'FAILED' }}"
+  tags:
+    - wordpress:webserver
+    - wordpress:apache
+    - wordpress:summary

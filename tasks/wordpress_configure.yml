@@ -1,0 +1,246 @@
+---
+# WordPress configuration tasks
+
+- name: Create WordPress system user
+  ansible.builtin.user:
+    name: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    home: "{{ wordpress_install_dir }}"
+    shell: /bin/bash
+    system: true
+    create_home: false
+  tags:
+    - wordpress:configure
+    - wordpress:user
+
+- name: Create WordPress system group
+  ansible.builtin.group:
+    name: "{{ wordpress_system_group }}"
+    system: true
+  tags:
+    - wordpress:configure
+    - wordpress:user
+
+- name: Set proper ownership for WordPress files
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    recurse: true
+  tags:
+    - wordpress:configure
+    - wordpress:permissions
+
+- name: Set proper permissions for WordPress directories
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    file_type: directory
+  register: wp_directories
+
+- name: Apply directory permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_dir_permissions }}"
+  loop: "{{ wp_directories.files }}"
+  tags:
+    - wordpress:configure
+    - wordpress:permissions
+
+- name: Set proper permissions for WordPress files
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    file_type: file
+  register: wp_files
+
+- name: Apply file permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_file_permissions }}"
+  loop: "{{ wp_files.files }}"
+  tags:
+    - wordpress:configure
+    - wordpress:permissions
+
+- name: Create uploads directory
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/uploads"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  tags:
+    - wordpress:configure
+    - wordpress:uploads
+
+- name: Configure WordPress wp-config.php
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: "{{ wordpress_install_dir }}/wp-config.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0640'
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:configure
+    - wordpress:config
+
+- name: Create WordPress .htaccess file (Apache)
+  ansible.builtin.template:
+    src: htaccess.j2
+    dest: "{{ wordpress_install_dir }}/.htaccess"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  when: wordpress_web_server == 'apache'
+  notify: reload apache
+  tags:
+    - wordpress:configure
+    - wordpress:htaccess
+
+- name: Set up WordPress multisite (if enabled)
+  ansible.builtin.command:
+    cmd: >
+      wp core multisite-install
+      --path="{{ wordpress_install_dir }}"
+      --url="{{ wordpress_site_url }}"
+      --title="{{ wordpress_site_title }}"
+      --admin_user="{{ wordpress_admin_user }}"
+      --admin_password="{{ wordpress_admin_password }}"
+      --admin_email="{{ wordpress_admin_email }}"
+      {{ '--subdomains' if wordpress_multisite_subdomain else '' }}
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when:
+    - wordpress_multisite_enabled | bool
+    - wordpress_install_wpcli | bool
+  changed_when: false
+  tags:
+    - wordpress:configure
+    - wordpress:multisite
+
+- name: Configure WordPress options via WP-CLI
+  ansible.builtin.command:
+    cmd: >
+      wp option update {{ item.key }} "{{ item.value }}" --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  loop:
+    - { key: 'siteurl', value: "{{ wordpress_site_url }}" }
+    - { key: 'home', value: "{{ wordpress_site_url }}" }
+    - { key: 'admin_email', value: "{{ wordpress_admin_email }}" }
+    - { key: 'blogname', value: "{{ wordpress_site_title }}" }
+    - { key: 'start_of_week', value: '1' }
+    - { key: 'default_pingback_flag', value: '0' }
+    - { key: 'default_ping_status', value: 'closed' }
+    - { key: 'default_comment_status', value: 'closed' }
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+  tags:
+    - wordpress:configure
+    - wordpress:options
+
+- name: Configure WordPress permalink structure
+  ansible.builtin.command:
+    cmd: >
+      wp rewrite structure '/%postname%/' --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+  tags:
+    - wordpress:configure
+    - wordpress:permalinks
+
+- name: Flush WordPress rewrite rules
+  ansible.builtin.command:
+    cmd: >
+      wp rewrite flush --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+  tags:
+    - wordpress:configure
+    - wordpress:permalinks
+
+- name: Configure WordPress object cache (if enabled)
+  ansible.builtin.template:
+    src: object-cache.php.j2
+    dest: "{{ wordpress_install_dir }}/wp-content/object-cache.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  when: wordpress_enable_object_cache | bool
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:configure
+    - wordpress:cache
+
+- name: Configure WordPress cron (disable WP-Cron if system cron enabled)
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    regexp: "define\\s*\\(\\s*['\"]DISABLE_WP_CRON['\"]"
+    line: "define('DISABLE_WP_CRON', {{ wordpress_disable_wp_cron | lower }});"
+    insertbefore: "/* That's all, stop editing!"
+  when: wordpress_disable_wp_cron | bool
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:configure
+    - wordpress:cron
+
+- name: Set up system cron for WordPress
+  ansible.builtin.cron:
+    name: "WordPress Cron"
+    minute: "{{ wordpress_cron_schedule.split()[0] }}"
+    hour: "{{ wordpress_cron_schedule.split()[1] }}"
+    day: "{{ wordpress_cron_schedule.split()[2] }}"
+    month: "{{ wordpress_cron_schedule.split()[3] }}"
+    weekday: "{{ wordpress_cron_schedule.split()[4] }}"
+    job: "curl -s {{ wordpress_site_url }}/wp-cron.php > /dev/null 2>&1"
+    user: "{{ wordpress_system_user }}"
+  when:
+    - wordpress_system_cron_enabled | bool
+    - wordpress_disable_wp_cron | bool
+  tags:
+    - wordpress:configure
+    - wordpress:cron
+
+- name: Create WordPress log directory
+  ansible.builtin.file:
+    path: "{{ wordpress_log_dir }}"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  when: wordpress_enable_logging | bool
+  tags:
+    - wordpress:configure
+    - wordpress:logging
+
+- name: Configure WordPress debug logging
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    regexp: "define\\s*\\(\\s*['\"]{{ item.key }}['\"]"
+    line: "define('{{ item.key }}', {{ item.value }});"
+    insertbefore: "/* That's all, stop editing!"
+  loop:
+    - { key: 'WP_DEBUG', value: "{{ wordpress_debug | lower }}" }
+    - { key: 'WP_DEBUG_LOG', value: "{{ wordpress_debug_log | lower }}" }
+    - { key: 'WP_DEBUG_DISPLAY', value: "{{ wordpress_debug_display | lower }}" }
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:configure
+    - wordpress:debug
+
+- name: Configure additional WordPress constants
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    regexp: "define\\s*\\(\\s*['\"]{{ item.key }}['\"]"
+    line: "define('{{ item.key }}', {{ item.value if item.value is string else item.value | lower }});"
+    insertbefore: "/* That's all, stop editing!"
+  loop: "{{ wordpress_additional_constants | dict2items }}"
+  when: wordpress_additional_constants | length > 0
+  notify: run wp-cli cache flush
+  tags:
+    - wordpress:configure
+    - wordpress:constants

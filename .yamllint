@@ -17,6 +17,9 @@ rules:
     max-spaces-inside: 1
   brackets:
     max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
 
 ignore: |
   .github/

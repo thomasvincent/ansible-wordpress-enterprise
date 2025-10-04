@@ -1,0 +1,60 @@
+---
+# SSL/TLS configuration tasks
+
+- name: Install SSL/TLS packages
+  ansible.builtin.package:
+    name:
+      - openssl
+      - "{{ 'certbot' if wordpress_use_letsencrypt else omit }}"
+      - "{{ 'python3-certbot-nginx' if wordpress_web_server == 'nginx' and wordpress_use_letsencrypt else omit }}"
+      - "{{ 'python3-certbot-apache' if wordpress_web_server == 'apache' and wordpress_use_letsencrypt else omit }}"
+    state: present
+  when: item is not none
+
+- name: Create SSL certificate directory
+  ansible.builtin.file:
+    path: "{{ wordpress_ssl_cert_dir }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Generate self-signed certificate (if not using Let's Encrypt)
+  ansible.builtin.command: |
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout {{ wordpress_ssl_cert_dir }}/{{ wordpress_server_name }}.key \
+    -out {{ wordpress_ssl_cert_dir }}/{{ wordpress_server_name }}.crt \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN={{ wordpress_server_name }}"
+  args:
+    creates: "{{ wordpress_ssl_cert_dir }}/{{ wordpress_server_name }}.key"
+  when: not wordpress_use_letsencrypt | bool
+
+- name: Obtain Let's Encrypt certificate (Nginx)
+  ansible.builtin.command: |
+    certbot certonly --nginx -d {{ wordpress_server_name }} \
+    --non-interactive --agree-tos --email {{ wordpress_admin_email }}
+  args:
+    creates: "/etc/letsencrypt/live/{{ wordpress_server_name }}/fullchain.pem"
+  when:
+    - wordpress_use_letsencrypt | bool
+    - wordpress_web_server == 'nginx'
+  notify: restart nginx
+
+- name: Obtain Let's Encrypt certificate (Apache)
+  ansible.builtin.command: |
+    certbot certonly --apache -d {{ wordpress_server_name }} \
+    --non-interactive --agree-tos --email {{ wordpress_admin_email }}
+  args:
+    creates: "/etc/letsencrypt/live/{{ wordpress_server_name }}/fullchain.pem"
+  when:
+    - wordpress_use_letsencrypt | bool
+    - wordpress_web_server == 'apache'
+  notify: restart apache
+
+- name: Setup Let's Encrypt auto-renewal
+  ansible.builtin.cron:
+    name: "Let's Encrypt renewal"
+    minute: "0"
+    hour: "2,14"
+    job: "/usr/bin/certbot renew --quiet"
+  when: wordpress_use_letsencrypt | bool
