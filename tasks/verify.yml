@@ -120,7 +120,7 @@
   register: memcached_test
   changed_when: false
   failed_when: false
-  when: 
+  when:
     - wordpress_enable_memcached | bool
     - wordpress_memcached_servers | length > 0
   tags:
