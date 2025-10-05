@@ -67,3 +67,4 @@
       ansible.builtin.command:
         cmd: "restorecon -Rv {{ wordpress_install_dir }}"
       changed_when: false
+

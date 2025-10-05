@@ -44,7 +44,7 @@
     regexp: "define\\s*\\(\\s*['\"]WP_DEBUG_LOG['\"]"
     line: "define('WP_DEBUG_LOG', '{{ wordpress_error_log }}');"
     insertbefore: "/* That's all, stop editing!"
-  when: 
+  when:
     - wordpress_enable_logging | bool
     - wordpress_debug_log | bool
   notify: restart php-fpm

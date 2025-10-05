@@ -325,7 +325,7 @@
     owner: root
     group: root
     mode: '0644'
-  when: 
+  when:
     - wordpress_cloud_provider != 'none'
     - wordpress_cloud_provider is defined
   notify: restart fail2ban

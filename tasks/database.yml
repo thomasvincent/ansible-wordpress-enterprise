@@ -88,3 +88,4 @@
   community.mysql.mysql_query:
     query: FLUSH PRIVILEGES
   changed_when: false
+

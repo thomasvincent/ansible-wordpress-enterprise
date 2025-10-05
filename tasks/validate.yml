@@ -57,3 +57,4 @@
     fail_msg: "Backup configuration is invalid"
     success_msg: "Backup configuration is valid"
   when: wordpress_enable_backups | bool
+

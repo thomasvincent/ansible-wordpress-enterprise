@@ -128,3 +128,4 @@
       ansible.builtin.debug:
         msg: "WordPress installed successfully"
       when: wp_install_result.changed
+

@@ -5,7 +5,7 @@
   ansible.builtin.package:
     name: "{{ wordpress_redis_packages }}"
     state: present
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - not wordpress_use_external_cache | bool
   notify: restart redis
@@ -21,7 +21,7 @@
     group: root
     mode: '0644'
     backup: true
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - not wordpress_use_external_cache | bool
   notify: restart redis
@@ -56,7 +56,7 @@
     - { key: 'save', value: '900 1' }
     - { key: 'save', value: '300 10' }
     - { key: 'save', value: '60 10000' }
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - not wordpress_use_external_cache | bool
   notify: restart redis
@@ -69,7 +69,7 @@
     name: "{{ wordpress_redis_service }}"
     enabled: true
     state: started
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - not wordpress_use_external_cache | bool
   tags:
@@ -80,7 +80,7 @@
   ansible.builtin.package:
     name: "{{ wordpress_memcached_packages }}"
     state: present
-  when: 
+  when:
     - wordpress_enable_memcached | bool
     - not wordpress_use_external_cache | bool
   notify: restart memcached
@@ -96,7 +96,7 @@
     group: root
     mode: '0644'
     backup: true
-  when: 
+  when:
     - wordpress_enable_memcached | bool
     - not wordpress_use_external_cache | bool
   notify: restart memcached
@@ -109,7 +109,7 @@
     name: "{{ wordpress_memcached_service }}"
     enabled: true
     state: started
-  when: 
+  when:
     - wordpress_enable_memcached | bool
     - not wordpress_use_external_cache | bool
   tags:
@@ -167,7 +167,7 @@
     url: "https://downloads.wordpress.org/plugin/redis-cache.latest-stable.zip"
     dest: "/tmp/redis-cache.zip"
     mode: '0644'
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - wordpress_enable_object_cache | bool
   tags:
@@ -183,7 +183,7 @@
     group: "{{ wordpress_system_group }}"
     remote_src: true
     creates: "{{ wordpress_install_dir }}/wp-content/plugins/redis-cache"
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - wordpress_enable_object_cache | bool
   tags:
@@ -273,7 +273,7 @@
   register: redis_ping
   changed_when: false
   failed_when: false
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - not wordpress_use_external_cache | bool
   tags:
@@ -287,7 +287,7 @@
   register: external_redis_ping
   changed_when: false
   failed_when: false
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - wordpress_use_external_cache | bool
   tags:
@@ -297,12 +297,13 @@
 
 - name: Verify cache configuration
   ansible.builtin.debug:
-    msg: 
+    msg:
       - "Redis status: {{ 'OK' if redis_ping.stdout == 'PONG' else 'FAILED' }}"
       - "External Redis status: {{ 'OK' if external_redis_ping.stdout == 'PONG' else 'FAILED' }}"
-  when: 
+  when:
     - wordpress_enable_redis | bool
     - redis_ping is defined or external_redis_ping is defined
   tags:
     - wordpress:caching
     - wordpress:verify
+

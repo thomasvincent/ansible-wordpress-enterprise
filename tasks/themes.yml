@@ -97,3 +97,4 @@
         - item not in (wordpress_themes + wordpress_custom_themes) | map(attribute='name') | list
       failed_when: false
       changed_when: false
+

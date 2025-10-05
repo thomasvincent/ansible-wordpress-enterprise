@@ -200,12 +200,12 @@
 - name: Block common WordPress attack patterns (RedHat/CentOS)
   ansible.posix.firewalld:
     rich_rule: >
-      rule family='ipv4' 
-      source address='0.0.0.0/0' 
-      service name='http' 
-      log prefix='WordPress Attack: ' 
-      level='warning' 
-      limit value='10/m' 
+      rule family='ipv4'
+      source address='0.0.0.0/0'
+      service name='http'
+      log prefix='WordPress Attack: '
+      level='warning'
+      limit value='10/m'
       drop
     zone: "{{ wordpress_firewall_zone | default('public') }}"
     permanent: true

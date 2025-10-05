@@ -102,3 +102,4 @@
       become_user: "{{ wordpress_system_user }}"
       when: "'wp-super-cache' in wordpress_plugins | map(attribute='name') | list"
       changed_when: false
+
