@@ -1,0 +1,4 @@
+# This file contains ignores for ansible-lint
+
+# UFW module is from community.general collection which is installed as dependency
+tasks/firewall.yml syntax-check[unknown-module]
