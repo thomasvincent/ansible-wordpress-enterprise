@@ -30,9 +30,14 @@ RUN dnf -y install \
 RUN useradd -m -s /bin/bash molecule && \
     echo "molecule ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/molecule
 
-# Install Ansible
+# Install Ansible (handle PEP 668 for Ubuntu 24.04)
+{% if item.image == 'ubuntu:24.04' %}
+RUN python3 -m pip install --upgrade pip --break-system-packages && \
+    python3 -m pip install ansible --break-system-packages
+{% else %}
 RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install ansible
+{% endif %}
 
 WORKDIR /tmp
 
