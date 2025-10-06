@@ -43,5 +43,7 @@
         update_cache: true
       when: ansible_os_family == "RedHat"
   
-  roles:
-    - role: ansible-wordpress-enterprise
+  tasks:
+    - name: Include ansible-wordpress-enterprise role
+      ansible.builtin.include_role:
+        name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
