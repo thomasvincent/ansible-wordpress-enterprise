@@ -68,7 +68,8 @@
     - wordpress_configure_firewall | bool
 
 - name: Reload ufw
-  community.general.ufw:
+  ansible.builtin.systemd:
+    name: ufw
     state: reloaded
   when:
     - ansible_os_family == "Debian"

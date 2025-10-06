@@ -365,4 +365,4 @@
 
           -- Automated Deployment System
       when: wordpress_smtp_enabled | bool
-      ignore_errors: true
+      failed_when: false
