@@ -1,0 +1,47 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  
+  vars:
+    # Basic WordPress configuration for testing
+    wordpress_site_url: "http://localhost"
+    wordpress_site_title: "Test WordPress Site"
+    wordpress_admin_user: "admin"
+    wordpress_admin_email: "admin@example.com"
+    wordpress_admin_password: "TestPass123!"
+    
+    # Use SQLite for testing to avoid database setup
+    wordpress_db_engine: "sqlite"
+    
+    # Disable features that require external services
+    wordpress_enable_ssl: false
+    wordpress_use_letsencrypt: false
+    wordpress_enable_fail2ban: false
+    wordpress_configure_firewall: false
+    wordpress_enable_backups: false
+    wordpress_enable_monitoring: false
+    wordpress_use_external_db: false
+    wordpress_use_external_cache: false
+    wordpress_enable_cdn: false
+    
+    # Simple testing configuration
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    wordpress_enable_redis: false
+    wordpress_enable_memcached: false
+    
+  pre_tasks:
+    - name: Update apt cache (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+    
+    - name: Update dnf cache (RedHat)
+      ansible.builtin.dnf:
+        update_cache: true
+      when: ansible_os_family == "RedHat"
+  
+  roles:
+    - role: ansible-wordpress-enterprise

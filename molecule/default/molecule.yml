@@ -1,0 +1,74 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: ubuntu-22
+    image: ubuntu:22.04
+    dockerfile: ../default/Dockerfile.j2
+    pre_build_image: false
+    command: /lib/systemd/systemd
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    capabilities:
+      - SYS_ADMIN
+  
+  - name: ubuntu-24
+    image: ubuntu:24.04
+    dockerfile: ../default/Dockerfile.j2
+    pre_build_image: false
+    command: /lib/systemd/systemd
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    capabilities:
+      - SYS_ADMIN
+  
+  - name: rocky-9
+    image: rockylinux:9
+    dockerfile: ../default/Dockerfile.j2
+    pre_build_image: false
+    command: /usr/sbin/init
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    tmpfs:
+      - /run
+      - /run/lock
+    capabilities:
+      - SYS_ADMIN
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+      callback_whitelist: profile_tasks, timer, yaml
+  inventory:
+    host_vars:
+      ubuntu-22:
+        ansible_python_interpreter: /usr/bin/python3
+      ubuntu-24:
+        ansible_python_interpreter: /usr/bin/python3
+      rocky-9:
+        ansible_python_interpreter: /usr/bin/python3
+  playbooks:
+    converge: ${MOLECULE_PLAYBOOK:-converge.yml}
+  lint:
+    name: ansible-lint
+    enabled: false  # Already done in CI
+
+verifier:
+  name: ansible
