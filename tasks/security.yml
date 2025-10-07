@@ -1,1 +1,370 @@
+---
+# Security Hardening Tasks
 
+- name: Install security packages
+  ansible.builtin.package:
+    name:
+      - unattended-upgrades
+      - logwatch
+      - rkhunter
+      - chkrootkit
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Install security packages (RedHat/CentOS)
+  ansible.builtin.package:
+    name:
+      - yum-cron
+      - logwatch
+      - rkhunter
+      - chkrootkit
+    state: present
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: Configure automatic security updates (Debian/Ubuntu)
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Enable automatic security updates (Debian/Ubuntu)
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Configure yum-cron for automatic updates (RedHat/CentOS)
+  ansible.builtin.template:
+    src: yum-cron.conf.j2
+    dest: /etc/yum/yum-cron.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: Enable yum-cron service (RedHat/CentOS)
+  ansible.builtin.service:
+    name: yum-cron
+    state: started
+    enabled: true
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: Disable unused network services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  become: true
+  loop:
+    - telnet
+    - rsh
+    - rlogin
+    - vsftpd
+    - httpd
+  failed_when: false
+
+- name: Set strong password policy
+  ansible.builtin.template:
+    src: pwquality.conf.j2
+    dest: /etc/security/pwquality.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+
+- name: Configure login attempts and lockout
+  ansible.builtin.template:
+    src: faillock.conf.j2
+    dest: /etc/security/faillock.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+
+- name: Secure shared memory
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "tmpfs /run/shm tmpfs defaults,noexec,nosuid 0 0"
+    create: true
+    backup: true
+  become: true
+
+- name: Configure kernel security parameters
+  ansible.builtin.template:
+    src: 99-security.conf.j2
+    dest: /etc/sysctl.d/99-security.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  notify: Reload sysctl
+
+- name: Secure SSH configuration
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    backup: true
+    validate: '/usr/sbin/sshd -t -f %s'
+  become: true
+  notify: Restart sshd
+
+- name: Create WordPress security configuration
+  ansible.builtin.template:
+    src: wp-security.conf.j2
+    dest: "{{ wordpress_install_dir }}/wp-security.conf"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+
+- name: Remove default WordPress files
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/{{ item }}"
+    state: absent
+  become: true
+  loop:
+    - readme.html
+    - wp-config-sample.php
+    - license.txt
+
+- name: Secure WordPress directories
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/{{ item }}"
+    mode: '0750'
+  become: true
+  loop:
+    - wp-admin
+    - wp-includes
+    - wp-content
+
+- name: Create .htaccess security rules
+  ansible.builtin.template:
+    src: htaccess-security.j2
+    dest: "{{ wordpress_install_dir }}/.htaccess-security"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+  when: wordpress_web_server == "apache"
+
+- name: Apply security headers in .htaccess
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/.htaccess"
+    marker: "# {mark} SECURITY HEADERS"
+    block: |
+      # Security Headers
+      <IfModule mod_headers.c>
+          Header always set X-Content-Type-Options nosniff
+          Header always set X-Frame-Options DENY
+          Header always set X-XSS-Protection "1; mode=block"
+          Header always set Referrer-Policy "strict-origin-when-cross-origin"
+          Header always set Permissions-Policy "geolocation=(),midi=(),sync-xhr=(),microphone=(),camera=(),magnetometer=(),gyroscope=(),fullscreen=(self),payment=()"
+      </IfModule>
+    insertafter: "# BEGIN WordPress"
+    create: true
+  become: true
+  when: wordpress_web_server == "apache"
+
+- name: Protect sensitive WordPress files
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/.htaccess"
+    marker: "# {mark} PROTECT SENSITIVE FILES"
+    block: |
+      # Protect sensitive files
+      <Files wp-config.php>
+          Order deny,allow
+          Deny from all
+      </Files>
+      <Files .htaccess>
+          Order deny,allow
+          Deny from all
+      </Files>
+      <Files readme.html>
+          Order deny,allow
+          Deny from all
+      </Files>
+      <Files license.txt>
+          Order deny,allow
+          Deny from all
+      </Files>
+    insertafter: "# BEGIN WordPress"
+    create: true
+  become: true
+  when: wordpress_web_server == "apache"
+
+- name: Disable XML-RPC if not needed
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/.htaccess"
+    marker: "# {mark} DISABLE XML-RPC"
+    block: |
+      # Disable XML-RPC
+      <Files xmlrpc.php>
+          Order deny,allow
+          Deny from all
+      </Files>
+    insertafter: "# BEGIN WordPress"
+    create: true
+  become: true
+  when: wordpress_web_server == "apache"
+
+- name: Install WordPress security plugins via WP-CLI
+  ansible.builtin.command:
+    cmd: >
+      wp plugin install {{ item }}
+      --activate
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  loop:
+    - wordfence
+    - all-in-one-wp-security-and-firewall
+    - limit-login-attempts-reloaded
+  when: wordpress_install_wpcli | bool
+  register: security_plugin_install
+  changed_when: "'already installed' not in security_plugin_install.stdout"
+
+- name: Configure file permissions recursively
+  ansible.builtin.command:
+    cmd: find {{ wordpress_install_dir }} -type f -exec chmod {{ wordpress_file_permissions }} {} \;
+  become: true
+  changed_when: false
+
+- name: Configure directory permissions recursively
+  ansible.builtin.command:
+    cmd: find {{ wordpress_install_dir }} -type d -exec chmod {{ wordpress_dir_permissions }} {} \;
+  become: true
+  changed_when: false
+
+- name: Set special permissions for wp-config.php
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    mode: '0600'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+  become: true
+
+- name: Create security monitoring script
+  ansible.builtin.template:
+    src: security-monitor.sh.j2
+    dest: /usr/local/bin/security-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule security monitoring
+  ansible.builtin.cron:
+    name: "WordPress Security Monitoring"
+    minute: "0"
+    hour: "*/6"
+    job: "/usr/local/bin/security-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Configure rkhunter
+  ansible.builtin.template:
+    src: rkhunter.conf.j2
+    dest: /etc/rkhunter.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+
+- name: Update rkhunter database
+  ansible.builtin.command:
+    cmd: rkhunter --update
+  become: true
+  changed_when: false
+
+- name: Schedule rkhunter scan
+  ansible.builtin.cron:
+    name: "RKHunter Security Scan"
+    minute: "0"
+    hour: "3"
+    job: "/usr/bin/rkhunter --checkall --quiet --skip-keypress"
+    user: root
+    state: present
+  become: true
+
+- name: Configure logwatch
+  ansible.builtin.template:
+    src: logwatch.conf.j2
+    dest: /etc/logwatch/conf/logwatch.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+
+- name: Create WordPress admin user security script
+  ansible.builtin.template:
+    src: wp-admin-security.sh.j2
+    dest: /usr/local/bin/wp-admin-security.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_install_wpcli | bool
+
+- name: Apply admin security hardening
+  ansible.builtin.command:
+    cmd: /usr/local/bin/wp-admin-security.sh
+  become: true
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Hide WordPress version information
+  ansible.builtin.copy:
+    content: |
+      <?php
+      // Hide WordPress version information
+      remove_action('wp_head', 'wp_generator');
+      function remove_version_scripts_styles($src) {
+          if (strpos($src, 'ver=')) {
+              $src = remove_query_arg('ver', $src);
+          }
+          return $src;
+      }
+      add_filter('style_loader_src', 'remove_version_scripts_styles', 9999);
+      add_filter('script_loader_src', 'remove_version_scripts_styles', 9999);
+    dest: "{{ wordpress_install_dir }}/wp-content/mu-plugins/security-hardening.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+
+- name: Create security headers for Nginx
+  ansible.builtin.template:
+    src: nginx-security-headers.conf.j2
+    dest: /etc/nginx/snippets/security-headers.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_web_server == "nginx"
+  notify: Reload nginx

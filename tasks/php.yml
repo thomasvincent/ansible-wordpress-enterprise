@@ -1,1 +1,75 @@
+---
+- name: Install PHP packages for Debian/Ubuntu
+  ansible.builtin.apt:
+    name:
+      - "php{{ wordpress_php_version }}"
+      - "php{{ wordpress_php_version }}-fpm"
+      - "php{{ wordpress_php_version }}-mysql"
+      - "php{{ wordpress_php_version }}-curl"
+      - "php{{ wordpress_php_version }}-gd"
+      - "php{{ wordpress_php_version }}-mbstring"
+      - "php{{ wordpress_php_version }}-xml"
+      - "php{{ wordpress_php_version }}-xmlrpc"
+      - "php{{ wordpress_php_version }}-soap"
+      - "php{{ wordpress_php_version }}-intl"
+      - "php{{ wordpress_php_version }}-zip"
+      - "php{{ wordpress_php_version }}-bcmath"
+      - "php{{ wordpress_php_version }}-imagick"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  become: true
 
+- name: Install PHP packages for RedHat/CentOS
+  ansible.builtin.dnf:
+    name:
+      - php
+      - php-fpm
+      - php-mysqlnd
+      - php-curl
+      - php-gd
+      - php-mbstring
+      - php-xml
+      - php-soap
+      - php-intl
+      - php-zip
+      - php-bcmath
+      - php-imagick
+      - php-opcache
+    state: present
+  when: ansible_os_family == "RedHat"
+  become: true
+
+- name: Configure PHP-FPM pool
+  ansible.builtin.template:
+    src: php-fpm-pool.conf.j2
+    dest: "{{ wordpress_php_fpm_pool_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: restart php-fpm
+
+- name: Configure PHP settings
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_php_ini_path }}"
+    regexp: "^{{ item.key }} ="
+    line: "{{ item.key }} = {{ item.value }}"
+    state: present
+  loop:
+    - { key: 'upload_max_filesize', value: '{{ wordpress_php_upload_max_filesize | default("64M") }}' }
+    - { key: 'post_max_size', value: '{{ wordpress_php_post_max_size | default("64M") }}' }
+    - { key: 'memory_limit', value: '{{ wordpress_php_memory_limit | default("256M") }}' }
+    - { key: 'max_execution_time', value: '{{ wordpress_php_max_execution_time | default("300") }}' }
+    - { key: 'max_input_time', value: '{{ wordpress_php_max_input_time | default("600") }}' }
+    - { key: 'max_input_vars', value: '{{ wordpress_php_max_input_vars | default("3000") }}' }
+  become: true
+  notify: restart php-fpm
+
+- name: Enable and start PHP-FPM service
+  ansible.builtin.systemd:
+    name: "{{ wordpress_php_fpm_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

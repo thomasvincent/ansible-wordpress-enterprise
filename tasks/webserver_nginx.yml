@@ -1,1 +1,84 @@
+---
+- name: Install Nginx
+  ansible.builtin.package:
+    name: nginx
+    state: present
+  become: true
 
+- name: Create Nginx sites directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+    - /etc/nginx/snippets
+  become: true
+
+- name: Configure Nginx for WordPress
+  ansible.builtin.template:
+    src: nginx-wordpress.conf.j2
+    dest: "/etc/nginx/sites-available/wordpress"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: reload nginx
+
+- name: Enable WordPress site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/wordpress
+    dest: /etc/nginx/sites-enabled/wordpress
+    state: link
+  become: true
+  notify: reload nginx
+
+- name: Remove default Nginx site
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/sites-enabled/default
+    - /etc/nginx/sites-available/default
+  become: true
+  notify: reload nginx
+
+- name: Configure Nginx main settings
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  notify: reload nginx
+
+- name: Create Nginx cache directory
+  ansible.builtin.file:
+    path: /var/cache/nginx
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  become: true
+  when: wordpress_enable_nginx_cache | default(true)
+
+- name: Test Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  become: true
+  register: nginx_test
+  changed_when: false
+  check_mode: false
+
+- name: Enable and start Nginx service
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

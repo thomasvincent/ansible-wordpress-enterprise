@@ -1,1 +1,302 @@
+---
+# Fail2ban Configuration Tasks
 
+- name: Install fail2ban
+  ansible.builtin.package:
+    name: fail2ban
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when: wordpress_enable_fail2ban | bool
+
+- name: Create fail2ban jail configuration
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Create WordPress fail2ban filter
+  ansible.builtin.template:
+    src: wordpress.conf.j2
+    dest: /etc/fail2ban/filter.d/wordpress.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Create WordPress login fail2ban filter
+  ansible.builtin.template:
+    src: wordpress-auth.conf.j2
+    dest: /etc/fail2ban/filter.d/wordpress-auth.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Create WordPress spam fail2ban filter
+  ansible.builtin.template:
+    src: wordpress-spam.conf.j2
+    dest: /etc/fail2ban/filter.d/wordpress-spam.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Create Apache/Nginx bad request filter
+  ansible.builtin.template:
+    src: "{{ 'apache-badbots.conf.j2' if wordpress_web_server == 'apache' else 'nginx-badbots.conf.j2' }}"
+    dest: "/etc/fail2ban/filter.d/{{ wordpress_web_server }}-badbots.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Create fail2ban action for UFW (Debian/Ubuntu)
+  ansible.builtin.template:
+    src: ufw-wordpress.conf.j2
+    dest: /etc/fail2ban/action.d/ufw-wordpress.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_enable_fail2ban | bool
+    - wordpress_configure_firewall | bool
+  notify: Restart fail2ban
+
+- name: Create fail2ban action for firewalld (RedHat/CentOS)
+  ansible.builtin.template:
+    src: firewalld-wordpress.conf.j2
+    dest: /etc/fail2ban/action.d/firewalld-wordpress.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_enable_fail2ban | bool
+    - wordpress_configure_firewall | bool
+  notify: Restart fail2ban
+
+- name: Configure fail2ban to use proper log files
+  ansible.builtin.blockinfile:
+    path: /etc/fail2ban/jail.local
+    marker: "# {mark} LOG FILE CONFIGURATION"
+    block: |
+      # Log file paths
+      [DEFAULT]
+      {% if wordpress_web_server == 'apache' %}
+      {% if ansible_os_family == 'Debian' %}
+      apache_error_log = /var/log/apache2/error.log
+      apache_access_log = /var/log/apache2/access.log
+      {% else %}
+      apache_error_log = /var/log/httpd/error_log
+      apache_access_log = /var/log/httpd/access_log
+      {% endif %}
+      {% else %}
+      nginx_error_log = /var/log/nginx/error.log
+      nginx_access_log = /var/log/nginx/access.log
+      {% endif %}
+
+      # WordPress specific logs
+      wordpress_log = {{ wordpress_error_log }}
+    backup: true
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban service
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+  become: true
+  when: wordpress_enable_fail2ban | bool
+
+- name: Create fail2ban status check script
+  ansible.builtin.template:
+    src: fail2ban-status.sh.j2
+    dest: /usr/local/bin/fail2ban-status.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+
+- name: Create fail2ban unban script
+  ansible.builtin.template:
+    src: fail2ban-unban.sh.j2
+    dest: /usr/local/bin/fail2ban-unban.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+
+- name: Schedule fail2ban log monitoring
+  ansible.builtin.cron:
+    name: "Fail2ban Status Check"
+    minute: "*/15"
+    job: "/usr/local/bin/fail2ban-status.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_fail2ban | bool
+    - wordpress_enable_logging | bool
+
+- name: Configure fail2ban log rotation
+  ansible.builtin.template:
+    src: fail2ban-logrotate.j2
+    dest: /etc/logrotate.d/fail2ban
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - wordpress_enable_fail2ban | bool
+    - wordpress_logrotate_enabled | bool
+
+- name: Create fail2ban notification script
+  ansible.builtin.template:
+    src: fail2ban-notify.sh.j2
+    dest: /usr/local/bin/fail2ban-notify.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_fail2ban | bool
+
+- name: Configure fail2ban email notifications
+  ansible.builtin.blockinfile:
+    path: /etc/fail2ban/jail.local
+    marker: "# {mark} EMAIL NOTIFICATION"
+    block: |
+      # Email notification settings
+      [DEFAULT]
+      destemail = {{ wordpress_admin_email }}
+      sender = fail2ban@{{ ansible_domain | default(ansible_hostname) }}
+      mta = sendmail
+      action = %(action_mwl)s
+    backup: true
+  become: true
+  when:
+    - wordpress_enable_fail2ban | bool
+    - wordpress_smtp_enabled | bool
+  notify: Restart fail2ban
+
+- name: Test fail2ban configuration
+  ansible.builtin.command:
+    cmd: fail2ban-client -t
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  register: fail2ban_test
+  changed_when: false
+
+- name: Display fail2ban test result
+  ansible.builtin.debug:
+    msg: "Fail2ban configuration test passed"
+  when:
+    - wordpress_enable_fail2ban | bool
+    - fail2ban_test.rc == 0
+
+- name: Check fail2ban status
+  ansible.builtin.command:
+    cmd: fail2ban-client status
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  register: fail2ban_status
+  changed_when: false
+
+- name: Display active fail2ban jails
+  ansible.builtin.debug:
+    var: fail2ban_status.stdout_lines
+  when:
+    - wordpress_enable_fail2ban | bool
+    - fail2ban_status.stdout_lines is defined
+
+- name: Create fail2ban whitelist for trusted IPs
+  ansible.builtin.blockinfile:
+    path: /etc/fail2ban/jail.local
+    marker: "# {mark} TRUSTED IP WHITELIST"
+    block: |
+      # Trusted IP addresses (never ban these)
+      [DEFAULT]
+      ignoreip = 127.0.0.1/8 ::1 {{ wordpress_allowed_ips | join(' ') if wordpress_allowed_ips | length > 0 else '' }}
+    backup: true
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
+
+- name: Configure custom WordPress protection rules
+  ansible.builtin.blockinfile:
+    path: /etc/fail2ban/jail.local
+    marker: "# {mark} WORDPRESS PROTECTION"
+    block: |
+      # WordPress specific protection
+      [wordpress-auth]
+      enabled = true
+      filter = wordpress-auth
+      {% if wordpress_web_server == 'apache' %}
+      {% if ansible_os_family == 'Debian' %}
+      logpath = /var/log/apache2/access.log
+      {% else %}
+      logpath = /var/log/httpd/access_log
+      {% endif %}
+      {% else %}
+      logpath = /var/log/nginx/access.log
+      {% endif %}
+      maxretry = {{ wordpress_fail2ban_maxretry }}
+      findtime = {{ wordpress_fail2ban_findtime }}
+      bantime = {{ wordpress_fail2ban_bantime }}
+
+      [wordpress-spam]
+      enabled = true
+      filter = wordpress-spam
+      {% if wordpress_web_server == 'apache' %}
+      {% if ansible_os_family == 'Debian' %}
+      logpath = /var/log/apache2/access.log
+      {% else %}
+      logpath = /var/log/httpd/access_log
+      {% endif %}
+      {% else %}
+      logpath = /var/log/nginx/access.log
+      {% endif %}
+      maxretry = 3
+      findtime = 600
+      bantime = 3600
+
+      [{{ wordpress_web_server }}-badbots]
+      enabled = true
+      filter = {{ wordpress_web_server }}-badbots
+      {% if wordpress_web_server == 'apache' %}
+      {% if ansible_os_family == 'Debian' %}
+      logpath = /var/log/apache2/access.log
+      {% else %}
+      logpath = /var/log/httpd/access_log
+      {% endif %}
+      {% else %}
+      logpath = /var/log/nginx/access.log
+      {% endif %}
+      maxretry = 2
+      findtime = 600
+      bantime = 86400
+    backup: true
+  become: true
+  when: wordpress_enable_fail2ban | bool
+  notify: Restart fail2ban
