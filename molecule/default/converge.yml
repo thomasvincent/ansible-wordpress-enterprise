@@ -44,4 +44,4 @@
       when: ansible_os_family == "RedHat"
   
   roles:
-    - role: "../.."
+    - role: ansible-wordpress-enterprise

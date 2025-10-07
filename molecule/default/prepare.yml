@@ -1,0 +1,19 @@
+---
+- name: Prepare
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Create roles directory
+      ansible.builtin.file:
+        path: /etc/ansible/roles
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Link role to expected location
+      ansible.builtin.file:
+        src: /tmp
+        dest: /etc/ansible/roles/ansible-wordpress-enterprise
+        state: link
+        force: true
+      become: true
