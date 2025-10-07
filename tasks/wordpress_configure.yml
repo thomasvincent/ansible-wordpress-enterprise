@@ -1,1 +1,372 @@
+---
+# WordPress Configuration Tasks
 
+- name: Generate WordPress salts if not defined
+  ansible.builtin.uri:
+    url: https://api.wordpress.org/secret-key/1.1/salt/
+    return_content: true
+  register: wordpress_salts_api
+  when:
+    - wordpress_auth_key is not defined or wordpress_auth_key == ""
+    - not wordpress_installed.stat.exists
+
+- name: Create wp-config.php from template
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: "{{ wordpress_install_dir }}/wp-config.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0600'
+    backup: true
+  become: true
+  when: not wordpress_installed.stat.exists
+  notify: Run wp-cli cache flush
+
+- name: Install WordPress using WP-CLI (if not already installed)
+  ansible.builtin.command:
+    cmd: >
+      wp core install
+      --url="{{ wordpress_site_url }}"
+      --title="{{ wordpress_site_title }}"
+      --admin_user="{{ wordpress_admin_user }}"
+      --admin_password="{{ wordpress_admin_password }}"
+      --admin_email="{{ wordpress_admin_email }}"
+      --skip-email
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - not wordpress_installed.stat.exists
+  register: wp_install_result
+
+- name: Display WordPress installation result
+  ansible.builtin.debug:
+    var: wp_install_result.stdout
+  when:
+    - wp_install_result is defined
+    - wp_install_result.stdout is defined
+
+- name: Configure WordPress options via WP-CLI
+  ansible.builtin.command:
+    cmd: >
+      wp option update {{ item.option }} "{{ item.value }}"
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  loop:
+    - { option: "siteurl", value: "{{ wordpress_site_url }}" }
+    - { option: "home", value: "{{ wordpress_site_url }}" }
+    - { option: "blogname", value: "{{ wordpress_site_title }}" }
+    - { option: "admin_email", value: "{{ wordpress_admin_email }}" }
+    - { option: "start_of_week", value: "1" }
+    - { option: "use_balanceTags", value: "0" }
+    - { option: "default_comment_status", value: "closed" }
+    - { option: "default_ping_status", value: "closed" }
+    - { option: "comment_moderation", value: "1" }
+    - { option: "require_name_email", value: "1" }
+    - { option: "comment_whitelist", value: "1" }
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Configure WordPress permalink structure
+  ansible.builtin.command:
+    cmd: >
+      wp rewrite structure "/%postname%/"
+      --hard
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Update WordPress timezone
+  ansible.builtin.command:
+    cmd: >
+      wp option update timezone_string "{{ ansible_date_time.tz }}"
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Configure multisite (if enabled)
+  block:
+    - name: Install WordPress multisite
+      ansible.builtin.command:
+        cmd: >
+          wp core multisite-install
+          --url="{{ wordpress_site_url }}"
+          --title="{{ wordpress_site_title }}"
+          --admin_user="{{ wordpress_admin_user }}"
+          --admin_password="{{ wordpress_admin_password }}"
+          --admin_email="{{ wordpress_admin_email }}"
+          {{ '--subdomains' if wordpress_multisite_subdomain else '' }}
+          --path="{{ wordpress_install_dir }}"
+      become: true
+      become_user: "{{ wordpress_system_user }}"
+      when: not wordpress_installed.stat.exists
+
+    - name: Configure multisite constants in wp-config.php
+      ansible.builtin.blockinfile:
+        path: "{{ wordpress_install_dir }}/wp-config.php"
+        marker: "/* {mark} MULTISITE CONFIGURATION */"
+        block: |
+          /* Multisite Configuration */
+          define('WP_ALLOW_MULTISITE', true);
+          define('MULTISITE', true);
+          define('SUBDOMAIN_INSTALL', {{ 'true' if wordpress_multisite_subdomain else 'false' }});
+          define('DOMAIN_CURRENT_SITE', '{{ wordpress_server_name }}');
+          define('PATH_CURRENT_SITE', '/');
+          define('SITE_ID_CURRENT_SITE', 1);
+          define('BLOG_ID_CURRENT_SITE', 1);
+        insertbefore: "/* That's all, stop editing!"
+        backup: true
+      become: true
+
+  when:
+    - wordpress_multisite_enabled | bool
+    - wordpress_install_wpcli | bool
+
+- name: Configure additional WordPress constants
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} ADDITIONAL CONSTANTS */"
+    block: |
+      /* Additional WordPress Constants */
+      {% for constant, value in wordpress_additional_constants.items() %}
+      define('{{ constant }}', {{ value | to_json }});
+      {% endfor %}
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+  when: wordpress_additional_constants | length > 0
+
+- name: Configure WordPress object cache (Redis)
+  block:
+    - name: Install Redis object cache plugin
+      ansible.builtin.command:
+        cmd: >
+          wp plugin install redis-cache
+          --activate
+          --path="{{ wordpress_install_dir }}"
+      become: true
+      become_user: "{{ wordpress_system_user }}"
+
+    - name: Enable Redis object cache
+      ansible.builtin.command:
+        cmd: >
+          wp redis enable
+          --path="{{ wordpress_install_dir }}"
+      become: true
+      become_user: "{{ wordpress_system_user }}"
+
+    - name: Add Redis configuration to wp-config.php
+      ansible.builtin.blockinfile:
+        path: "{{ wordpress_install_dir }}/wp-config.php"
+        marker: "/* {mark} REDIS CONFIGURATION */"
+        block: |
+          /* Redis Object Cache Configuration */
+          define('WP_REDIS_HOST', '{{ wordpress_redis_host }}');
+          define('WP_REDIS_PORT', {{ wordpress_redis_port }});
+          define('WP_REDIS_DATABASE', {{ wordpress_redis_database }});
+          {% if wordpress_redis_password %}
+          define('WP_REDIS_PASSWORD', '{{ wordpress_redis_password }}');
+          {% endif %}
+          define('WP_CACHE_KEY_SALT', '{{ wordpress_server_name }}');
+        insertbefore: "/* That's all, stop editing!"
+        backup: true
+      become: true
+
+  when:
+    - wordpress_enable_redis | bool
+    - wordpress_enable_object_cache | bool
+    - wordpress_install_wpcli | bool
+
+- name: Configure WordPress CDN settings
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} CDN CONFIGURATION */"
+    block: |
+      /* CDN Configuration */
+      define('WP_CDN_DOMAIN', '{{ wordpress_cdn_url }}');
+      define('WP_CDN_HTTPS', {{ 'true' if wordpress_cdn_ssl_enabled else 'false' }});
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+  when:
+    - wordpress_enable_cdn | bool
+    - wordpress_cdn_url != ""
+
+- name: Configure SMTP settings in wp-config.php
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} SMTP CONFIGURATION */"
+    block: |
+      /* SMTP Configuration */
+      define('WPMS_ON', true);
+      define('WPMS_SMTP_HOST', '{{ wordpress_smtp_host }}');
+      define('WPMS_SMTP_PORT', {{ wordpress_smtp_port }});
+      define('WPMS_SMTP_AUTH', {{ 'true' if wordpress_smtp_auth else 'false' }});
+      define('WPMS_SMTP_AUTOTLS', true);
+      define('WPMS_SMTP_USER', '{{ wordpress_smtp_user }}');
+      define('WPMS_SMTP_PASS', '{{ wordpress_smtp_password }}');
+      define('WPMS_SMTP_FROM', '{{ wordpress_smtp_from_email }}');
+      define('WPMS_SMTP_FROMNAME', '{{ wordpress_smtp_from_name }}');
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+  when: wordpress_smtp_enabled | bool
+
+- name: Set up WordPress auto-updates
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} AUTO UPDATE CONFIGURATION */"
+    block: |
+      /* Auto Update Configuration */
+      define('WP_AUTO_UPDATE_CORE', true);
+      define('AUTOMATIC_UPDATER_DISABLED', false);
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+  when: wordpress_debug | bool == false
+
+- name: Configure WordPress file editing restrictions
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} FILE EDITING RESTRICTIONS */"
+    block: |
+      /* File Editing Restrictions */
+      define('DISALLOW_FILE_EDIT', {{ 'true' if wordpress_disable_file_edit else 'false' }});
+      define('DISALLOW_FILE_MODS', {{ 'true' if wordpress_disable_file_mods else 'false' }});
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+
+- name: Create advanced-cache.php for caching plugins
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/advanced-cache.php"
+    state: touch
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+  when: wordpress_enable_object_cache | bool
+
+- name: Create object-cache.php symbolic link for Redis
+  ansible.builtin.file:
+    src: "{{ wordpress_install_dir }}/wp-content/plugins/redis-cache/includes/object-cache.php"
+    dest: "{{ wordpress_install_dir }}/wp-content/object-cache.php"
+    state: link
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+  become: true
+  when:
+    - wordpress_enable_redis | bool
+    - wordpress_enable_object_cache | bool
+
+- name: Configure WordPress debugging and logging
+  ansible.builtin.blockinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    marker: "/* {mark} DEBUG CONFIGURATION */"
+    block: |
+      /* Debug Configuration */
+      define('WP_DEBUG', {{ 'true' if wordpress_debug else 'false' }});
+      define('WP_DEBUG_LOG', {{ 'true' if wordpress_debug_log else 'false' }});
+      define('WP_DEBUG_DISPLAY', {{ 'true' if wordpress_debug_display else 'false' }});
+      define('SCRIPT_DEBUG', {{ 'true' if wordpress_debug else 'false' }});
+      {% if wordpress_debug_log %}
+      define('WP_DEBUG_LOG_FILE', '{{ wordpress_error_log }}');
+      {% endif %}
+    insertbefore: "/* That's all, stop editing!"
+    backup: true
+  become: true
+
+- name: Install and activate essential plugins
+  ansible.builtin.command:
+    cmd: >
+      wp plugin install {{ item.name }}
+      {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
+      {% if item.state == 'present' %}--activate{% endif %}
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  loop: "{{ wordpress_plugins }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - item.state == "present"
+  register: plugin_install_result
+  changed_when: "'already installed' not in plugin_install_result.stdout"
+
+- name: Install and activate themes
+  ansible.builtin.command:
+    cmd: >
+      wp theme install {{ item.name }}
+      {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
+      {% if item.activate | default(false) %}--activate{% endif %}
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  loop: "{{ wordpress_themes }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - item.state == "present"
+  register: theme_install_result
+  changed_when: "'already installed' not in theme_install_result.stdout"
+
+- name: Flush WordPress rewrite rules
+  ansible.builtin.command:
+    cmd: >
+      wp rewrite flush
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Update WordPress database (if needed)
+  ansible.builtin.command:
+    cmd: >
+      wp core update-db
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  changed_when: false
+
+- name: Verify WordPress installation
+  ansible.builtin.command:
+    cmd: >
+      wp core verify-checksums
+      --path="{{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  when: wordpress_install_wpcli | bool
+  register: wp_verify_result
+  changed_when: false
+  ignore_errors: true
+
+- name: Display WordPress verification result
+  ansible.builtin.debug:
+    var: wp_verify_result.stdout_lines
+  when:
+    - wp_verify_result is defined
+    - wp_verify_result.stdout_lines is defined
+
+- name: Create WordPress info page
+  ansible.builtin.template:
+    src: wordpress-info.php.j2
+    dest: "{{ wordpress_install_dir }}/wp-info.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+  when: wordpress_debug | bool
+
+- name: Set final file permissions
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0600'
+  become: true

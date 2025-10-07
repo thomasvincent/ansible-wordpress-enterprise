@@ -1,1 +1,309 @@
+---
+# Backup Configuration Tasks
 
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  loop:
+    - "{{ wordpress_backup_dir }}"
+    - "{{ wordpress_backup_dir }}/database"
+    - "{{ wordpress_backup_dir }}/files"
+    - "{{ wordpress_backup_dir }}/logs"
+  when: wordpress_enable_backups | bool
+
+- name: Create database backup script
+  ansible.builtin.template:
+    src: database-backup.sh.j2
+    dest: /usr/local/bin/wordpress-db-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create files backup script
+  ansible.builtin.template:
+    src: files-backup.sh.j2
+    dest: /usr/local/bin/wordpress-files-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create full backup script
+  ansible.builtin.template:
+    src: full-backup.sh.j2
+    dest: /usr/local/bin/wordpress-full-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup cleanup script
+  ansible.builtin.template:
+    src: backup-cleanup.sh.j2
+    dest: /usr/local/bin/wordpress-backup-cleanup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule database backups
+  ansible.builtin.cron:
+    name: "WordPress Database Backup"
+    minute: "{{ wordpress_backup_schedule_minute }}"
+    hour: "{{ wordpress_backup_schedule_hour }}"
+    job: "/usr/local/bin/wordpress-db-backup.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule files backups
+  ansible.builtin.cron:
+    name: "WordPress Files Backup"
+    minute: "{{ wordpress_backup_schedule_minute }}"
+    hour: "{{ (wordpress_backup_schedule_hour | int + 1) % 24 }}"
+    job: "/usr/local/bin/wordpress-files-backup.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule full backups (weekly)
+  ansible.builtin.cron:
+    name: "WordPress Full Backup"
+    minute: "0"
+    hour: "1"
+    weekday: "0"
+    job: "/usr/local/bin/wordpress-full-backup.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule backup cleanup
+  ansible.builtin.cron:
+    name: "WordPress Backup Cleanup"
+    minute: "0"
+    hour: "4"
+    job: "/usr/local/bin/wordpress-backup-cleanup.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Install backup utilities
+  ansible.builtin.package:
+    name:
+      - rsync
+      - tar
+      - gzip
+      - pigz
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup configuration file
+  ansible.builtin.template:
+    src: backup.conf.j2
+    dest: /etc/wordpress-backup.conf
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup verification script
+  ansible.builtin.template:
+    src: backup-verify.sh.j2
+    dest: /usr/local/bin/wordpress-backup-verify.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup restoration script
+  ansible.builtin.template:
+    src: backup-restore.sh.j2
+    dest: /usr/local/bin/wordpress-backup-restore.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup notification script
+  ansible.builtin.template:
+    src: backup-notify.sh.j2
+    dest: /usr/local/bin/wordpress-backup-notify.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_smtp_enabled | bool
+
+- name: Create backup status monitoring script
+  ansible.builtin.template:
+    src: backup-monitor.sh.j2
+    dest: /usr/local/bin/wordpress-backup-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule backup monitoring
+  ansible.builtin.cron:
+    name: "WordPress Backup Monitoring"
+    minute: "30"
+    hour: "5"
+    job: "/usr/local/bin/wordpress-backup-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_enable_logging | bool
+
+- name: Configure backup log rotation
+  ansible.builtin.template:
+    src: backup-logrotate.j2
+    dest: /etc/logrotate.d/wordpress-backups
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_logrotate_enabled | bool
+
+- name: Test database backup
+  ansible.builtin.command:
+    cmd: /usr/local/bin/wordpress-db-backup.sh test
+  become: true
+  when: wordpress_enable_backups | bool
+  register: backup_test
+  changed_when: false
+  ignore_errors: true
+
+- name: Display backup test result
+  ansible.builtin.debug:
+    msg: "Backup configuration test: {{ 'PASSED' if backup_test.rc == 0 else 'FAILED' }}"
+  when:
+    - wordpress_enable_backups | bool
+    - backup_test is defined
+
+- name: Create backup encryption script (if enabled)
+  ansible.builtin.template:
+    src: backup-encrypt.sh.j2
+    dest: /usr/local/bin/wordpress-backup-encrypt.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_backup_encryption_enabled | default(false) | bool
+
+- name: Install GPG for backup encryption
+  ansible.builtin.package:
+    name: gnupg
+    state: present
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_backup_encryption_enabled | default(false) | bool
+
+- name: Create remote backup sync script
+  ansible.builtin.template:
+    src: backup-sync.sh.j2
+    dest: /usr/local/bin/wordpress-backup-sync.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_backup_remote_enabled | default(false) | bool
+
+- name: Schedule remote backup sync
+  ansible.builtin.cron:
+    name: "WordPress Remote Backup Sync"
+    minute: "0"
+    hour: "6"
+    job: "/usr/local/bin/wordpress-backup-sync.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_backup_remote_enabled | default(false) | bool
+
+- name: Create backup size monitoring script
+  ansible.builtin.template:
+    src: backup-size-monitor.sh.j2
+    dest: /usr/local/bin/wordpress-backup-size-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule backup size monitoring
+  ansible.builtin.cron:
+    name: "WordPress Backup Size Monitoring"
+    minute: "0"
+    hour: "7"
+    job: "/usr/local/bin/wordpress-backup-size-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_backups | bool
+    - wordpress_enable_logging | bool
+
+- name: Set proper permissions on backup directory
+  ansible.builtin.file:
+    path: "{{ wordpress_backup_dir }}"
+    owner: root
+    group: root
+    mode: '0700'
+    recurse: true
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create backup exclusion list
+  ansible.builtin.template:
+    src: backup-exclude.txt.j2
+    dest: /etc/wordpress-backup-exclude.txt
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Display backup configuration summary
+  ansible.builtin.debug:
+    msg: |
+      WordPress Backup Configuration Summary:
+      - Backup Directory: {{ wordpress_backup_dir }}
+      - Database Backups: Daily at {{ wordpress_backup_schedule_hour }}:{{ wordpress_backup_schedule_minute }}
+      - File Backups: Daily at {{ (wordpress_backup_schedule_hour | int + 1) % 24 }}:{{ wordpress_backup_schedule_minute }}
+      - Full Backups: Weekly on Sunday at 01:00
+      - Retention Period: {{ wordpress_backup_retention_days }} days
+      - Remote Sync: {{ wordpress_backup_remote_enabled | default(false) | bool }}
+      - Encryption: {{ wordpress_backup_encryption_enabled | default(false) | bool }}
+  when: wordpress_enable_backups | bool

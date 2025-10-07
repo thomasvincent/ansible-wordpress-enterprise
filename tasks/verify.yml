@@ -1,1 +1,379 @@
+---
+# WordPress Installation Verification Tasks
 
+- name: Check if WordPress is installed
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+  register: wordpress_config_exists
+
+- name: Verify WordPress core files
+  ansible.builtin.command:
+    cmd: "wp core verify-checksums --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_core_verify
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+  ignore_errors: true
+
+- name: Display WordPress core verification result
+  ansible.builtin.debug:
+    msg: "WordPress core files verification: {{ 'PASSED' if wp_core_verify.rc == 0 else 'FAILED' }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_core_verify is defined
+
+- name: Check WordPress version
+  ansible.builtin.command:
+    cmd: "wp core version --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_version_check
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+
+- name: Display WordPress version
+  ansible.builtin.debug:
+    msg: "WordPress version: {{ wp_version_check.stdout }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_version_check is defined
+    - wp_version_check.stdout is defined
+
+- name: Test database connection
+  ansible.builtin.command:
+    cmd: "wp db check --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_db_check
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+  ignore_errors: true
+
+- name: Display database connection status
+  ansible.builtin.debug:
+    msg: "Database connection: {{ 'SUCCESS' if wp_db_check.rc == 0 else 'FAILED' }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_db_check is defined
+
+- name: Check web server status
+  ansible.builtin.service_facts:
+
+- name: Verify web server is running
+  ansible.builtin.debug:
+    msg: "{{ wordpress_web_server | title }} status: {{ ansible_facts.services[wordpress_web_server_service[wordpress_web_server] + '.service'].state }}"
+  when: (wordpress_web_server_service[wordpress_web_server] + '.service') in ansible_facts.services
+
+- name: Test HTTP response
+  ansible.builtin.uri:
+    url: "http://{{ ansible_default_ipv4.address | default('localhost') }}"
+    method: GET
+    status_code: [200, 301, 302, 403]
+  register: http_response
+  ignore_errors: true
+
+- name: Display HTTP response status
+  ansible.builtin.debug:
+    msg: "HTTP response: {{ http_response.status | default('FAILED') }}"
+
+- name: Test HTTPS response (if SSL is enabled)
+  ansible.builtin.uri:
+    url: "https://{{ ansible_default_ipv4.address | default('localhost') }}"
+    method: GET
+    status_code: [200, 301, 302, 403]
+    validate_certs: false
+  register: https_response
+  when: wordpress_enable_ssl | bool
+  ignore_errors: true
+
+- name: Display HTTPS response status
+  ansible.builtin.debug:
+    msg: "HTTPS response: {{ https_response.status | default('FAILED') }}"
+  when: wordpress_enable_ssl | bool
+
+- name: Check PHP-FPM status
+  ansible.builtin.service_facts:
+
+- name: Verify PHP-FPM is running
+  ansible.builtin.debug:
+    msg: "PHP-FPM status: {{ ansible_facts.services[wordpress_php_fpm_service + '.service'].state }}"
+  when: (wordpress_php_fpm_service + '.service') in ansible_facts.services
+
+- name: Test PHP functionality
+  ansible.builtin.command:
+    cmd: "php -v"
+  register: php_version_test
+  changed_when: false
+
+- name: Display PHP version
+  ansible.builtin.debug:
+    msg: "PHP version: {{ php_version_test.stdout.split('\n')[0] }}"
+  when: php_version_test.stdout is defined
+
+- name: Check database service status
+  ansible.builtin.service_facts:
+
+- name: Verify database service is running
+  ansible.builtin.debug:
+    msg: "{{ wordpress_db_engine | title }} status: {{ ansible_facts.services[wordpress_db_service[wordpress_db_engine] + '.service'].state }}"
+  when:
+    - not wordpress_use_external_db | bool
+    - (wordpress_db_service[wordpress_db_engine] + '.service') in ansible_facts.services
+
+- name: Test Redis connection (if enabled)
+  ansible.builtin.command:
+    cmd: "redis-cli ping"
+  register: redis_ping_test
+  when: wordpress_enable_redis | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display Redis status
+  ansible.builtin.debug:
+    msg: "Redis connection: {{ 'SUCCESS' if redis_ping_test.stdout == 'PONG' else 'FAILED' }}"
+  when:
+    - wordpress_enable_redis | bool
+    - redis_ping_test is defined
+
+- name: Test Memcached connection (if enabled)
+  ansible.builtin.shell: |
+    echo "stats" | nc localhost 11211 | head -1
+  register: memcached_test
+  when: wordpress_enable_memcached | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display Memcached status
+  ansible.builtin.debug:
+    msg: "Memcached connection: {{ 'SUCCESS' if 'STAT' in memcached_test.stdout else 'FAILED' }}"
+  when:
+    - wordpress_enable_memcached | bool
+    - memcached_test is defined
+    - memcached_test.stdout is defined
+
+- name: Check SSL certificate (if enabled)
+  ansible.builtin.command:
+    cmd: "openssl x509 -in {{ wordpress_ssl_certificate }} -text -noout"
+  register: ssl_cert_verify
+  when:
+    - wordpress_enable_ssl | bool
+    - not wordpress_use_letsencrypt | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display SSL certificate status
+  ansible.builtin.debug:
+    msg: "SSL certificate: {{ 'VALID' if ssl_cert_verify.rc == 0 else 'INVALID' }}"
+  when:
+    - wordpress_enable_ssl | bool
+    - ssl_cert_verify is defined
+
+- name: Check Let's Encrypt certificate (if enabled)
+  ansible.builtin.command:
+    cmd: "certbot certificates"
+  register: letsencrypt_cert_check
+  when:
+    - wordpress_enable_ssl | bool
+    - wordpress_use_letsencrypt | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display Let's Encrypt certificate status
+  ansible.builtin.debug:
+    msg: "Let's Encrypt certificate: {{ 'FOUND' if wordpress_server_name in letsencrypt_cert_check.stdout else 'NOT FOUND' }}"
+  when:
+    - wordpress_enable_ssl | bool
+    - wordpress_use_letsencrypt | bool
+    - letsencrypt_cert_check is defined
+
+- name: Check firewall status (UFW)
+  ansible.builtin.command:
+    cmd: "ufw status"
+  register: ufw_status_check
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display UFW firewall status
+  ansible.builtin.debug:
+    msg: "UFW firewall: {{ 'ACTIVE' if 'Status: active' in ufw_status_check.stdout else 'INACTIVE' }}"
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - ufw_status_check is defined
+
+- name: Check firewalld status
+  ansible.builtin.command:
+    cmd: "firewall-cmd --state"
+  register: firewalld_status_check
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display firewalld status
+  ansible.builtin.debug:
+    msg: "Firewalld: {{ 'RUNNING' if firewalld_status_check.stdout == 'running' else 'NOT RUNNING' }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+    - firewalld_status_check is defined
+
+- name: Check fail2ban status
+  ansible.builtin.command:
+    cmd: "fail2ban-client status"
+  register: fail2ban_status_check
+  when: wordpress_enable_fail2ban | bool
+  changed_when: false
+  ignore_errors: true
+
+- name: Display fail2ban status
+  ansible.builtin.debug:
+    msg: "Fail2ban: {{ 'RUNNING' if fail2ban_status_check.rc == 0 else 'NOT RUNNING' }}"
+  when:
+    - wordpress_enable_fail2ban | bool
+    - fail2ban_status_check is defined
+
+- name: Check WordPress plugins status
+  ansible.builtin.command:
+    cmd: "wp plugin list --status=active --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_plugins_check
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+  ignore_errors: true
+
+- name: Display active plugins count
+  ansible.builtin.debug:
+    msg: "Active WordPress plugins: {{ (wp_plugins_check.stdout_lines | length - 1) if wp_plugins_check.stdout_lines is defined else 0 }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_plugins_check is defined
+
+- name: Check WordPress themes status
+  ansible.builtin.command:
+    cmd: "wp theme list --status=active --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_themes_check
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+  ignore_errors: true
+
+- name: Display active theme
+  ansible.builtin.debug:
+    msg: "Active WordPress theme: {{ wp_themes_check.stdout_lines[1].split()[0] if wp_themes_check.stdout_lines is defined and wp_themes_check.stdout_lines | length > 1 else 'Unknown' }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_themes_check is defined
+
+- name: Check WordPress updates
+  ansible.builtin.command:
+    cmd: "wp core check-update --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_updates_check
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_config_exists.stat.exists
+  changed_when: false
+  ignore_errors: true
+
+- name: Display WordPress update status
+  ansible.builtin.debug:
+    msg: "WordPress updates: {{ 'AVAILABLE' if wp_updates_check.rc == 0 and wp_updates_check.stdout != '' else 'UP TO DATE' }}"
+  when:
+    - wordpress_install_wpcli | bool
+    - wp_updates_check is defined
+
+- name: Check disk usage
+  ansible.builtin.command:
+    cmd: "df -h {{ wordpress_install_dir }}"
+  register: disk_usage_check
+  changed_when: false
+
+- name: Display disk usage
+  ansible.builtin.debug:
+    msg: "Disk usage for WordPress directory: {{ disk_usage_check.stdout_lines[1].split()[4] if disk_usage_check.stdout_lines is defined else 'Unknown' }}"
+
+- name: Check file permissions
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+  register: wp_config_perms
+
+- name: Verify wp-config.php permissions
+  ansible.builtin.debug:
+    msg: "wp-config.php permissions: {{ 'SECURE (600)' if wp_config_perms.stat.mode == '0600' else 'INSECURE (' + wp_config_perms.stat.mode + ')' }}"
+  when: wp_config_perms.stat.exists
+
+- name: Test WordPress URL response
+  ansible.builtin.uri:
+    url: "{{ wordpress_site_url }}"
+    method: GET
+    status_code: [200, 301, 302]
+    validate_certs: false
+  register: wp_url_response
+  ignore_errors: true
+
+- name: Display WordPress URL response
+  ansible.builtin.debug:
+    msg: "WordPress site response: {{ wp_url_response.status | default('FAILED') }}"
+
+- name: Generate verification report
+  ansible.builtin.template:
+    src: verification-report.txt.j2
+    dest: "{{ wordpress_log_dir }}/verification-report-{{ ansible_date_time.epoch }}.txt"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create verification summary
+  ansible.builtin.set_fact:
+    verification_summary:
+      wordpress_installed: "{{ wordpress_config_exists.stat.exists }}"
+      core_files_valid: "{{ wp_core_verify.rc == 0 if wp_core_verify is defined else 'N/A' }}"
+      database_connected: "{{ wp_db_check.rc == 0 if wp_db_check is defined else 'N/A' }}"
+      web_server_running: "{{ ansible_facts.services[wordpress_web_server_service[wordpress_web_server] + '.service'].state == 'running' if (wordpress_web_server_service[wordpress_web_server] + '.service') in ansible_facts.services else false }}"
+      php_fpm_running: "{{ ansible_facts.services[wordpress_php_fpm_service + '.service'].state == 'running' if (wordpress_php_fpm_service + '.service') in ansible_facts.services else false }}"
+      ssl_enabled: "{{ wordpress_enable_ssl }}"
+      ssl_working: "{{ https_response.status is defined and https_response.status in [200, 301, 302] if wordpress_enable_ssl else 'N/A' }}"
+      firewall_active: "{{ wordpress_configure_firewall and ((ufw_status_check is defined and 'Status: active' in ufw_status_check.stdout) or (firewalld_status_check is defined and firewalld_status_check.stdout == 'running')) }}"
+      fail2ban_running: "{{ wordpress_enable_fail2ban and fail2ban_status_check is defined and fail2ban_status_check.rc == 0 }}"
+      redis_connected: "{{ wordpress_enable_redis and redis_ping_test is defined and redis_ping_test.stdout == 'PONG' }}"
+      site_accessible: "{{ wp_url_response.status is defined and wp_url_response.status in [200, 301, 302] }}"
+
+- name: Display verification summary
+  ansible.builtin.debug:
+    msg: |
+      =====================================
+      WordPress Installation Verification
+      =====================================
+      WordPress Installed: {{ verification_summary.wordpress_installed }}
+      Core Files Valid: {{ verification_summary.core_files_valid }}
+      Database Connected: {{ verification_summary.database_connected }}
+      Web Server Running: {{ verification_summary.web_server_running }}
+      PHP-FPM Running: {{ verification_summary.php_fpm_running }}
+      SSL Enabled: {{ verification_summary.ssl_enabled }}
+      SSL Working: {{ verification_summary.ssl_working }}
+      Firewall Active: {{ verification_summary.firewall_active }}
+      Fail2ban Running: {{ verification_summary.fail2ban_running }}
+      Redis Connected: {{ verification_summary.redis_connected }}
+      Site Accessible: {{ verification_summary.site_accessible }}
+      =====================================

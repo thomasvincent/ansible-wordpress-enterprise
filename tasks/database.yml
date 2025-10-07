@@ -1,1 +1,258 @@
+---
+# Database Configuration Tasks
 
+- name: Install MySQL/MariaDB server packages
+  ansible.builtin.package:
+    name: "{{ wordpress_db_packages[wordpress_db_engine] }}"
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when: not wordpress_use_external_db | bool
+  notify: "Restart {{ wordpress_db_engine }}"
+
+- name: Ensure database service is started and enabled
+  ansible.builtin.service:
+    name: "{{ wordpress_db_service[wordpress_db_engine] }}"
+    state: started
+    enabled: true
+  become: true
+  when: not wordpress_use_external_db | bool
+
+- name: Set MySQL/MariaDB root password (first time)
+  ansible.builtin.mysql_user:
+    name: root
+    password: "{{ wordpress_db_root_password }}"
+    login_unix_socket: "{{ '/var/run/mysqld/mysqld.sock' if ansible_os_family == 'Debian' else '/var/lib/mysql/mysql.sock' }}"
+    state: present
+  become: true
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_db_root_password is defined
+  register: mysql_root_password_set
+  failed_when: false
+
+- name: Create MySQL root configuration file
+  ansible.builtin.template:
+    src: mysql-root.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
+  when: not wordpress_use_external_db | bool
+
+- name: Remove anonymous MySQL users
+  ansible.builtin.mysql_user:
+    name: ""
+    host_all: true
+    state: absent
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+  when: not wordpress_use_external_db | bool
+
+- name: Remove MySQL test database
+  ansible.builtin.mysql_db:
+    name: test
+    state: absent
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+  when: not wordpress_use_external_db | bool
+
+- name: Remove remote root user access
+  ansible.builtin.mysql_user:
+    name: root
+    host: "{{ item }}"
+    state: absent
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+  loop:
+    - "{{ ansible_hostname }}"
+    - "127.0.0.1"
+    - "::1"
+    - "localhost.localdomain"
+  when:
+    - not wordpress_use_external_db | bool
+    - item != "localhost"
+  failed_when: false
+
+- name: Create WordPress database
+  ansible.builtin.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    charset: "{{ wordpress_db_charset }}"
+    collation: "{{ wordpress_db_collate }}"
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+
+- name: Create WordPress database user
+  ansible.builtin.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    host: "{{ wordpress_db_host if wordpress_use_external_db else 'localhost' }}"
+    state: present
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+
+- name: Configure MySQL/MariaDB for WordPress
+  ansible.builtin.template:
+    src: mysql-wordpress.cnf.j2
+    dest: "{{ '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian' else '/etc/my.cnf.d/wordpress.cnf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: not wordpress_use_external_db | bool
+  notify: "Restart {{ wordpress_db_engine }}"
+
+- name: Optimize MySQL/MariaDB configuration
+  ansible.builtin.template:
+    src: "{{ 'mysql-optimization.cnf.j2' if wordpress_db_engine == 'mysql' else 'mariadb-optimization.cnf.j2' }}"
+    dest: "{{ '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian' else '/etc/my.cnf.d/optimization.cnf' }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: not wordpress_use_external_db | bool
+  notify: "Restart {{ wordpress_db_engine }}"
+
+- name: Create database backup directory
+  ansible.builtin.file:
+    path: "{{ wordpress_backup_dir }}/database"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Create database backup script
+  ansible.builtin.template:
+    src: database-backup.sh.j2
+    dest: /usr/local/bin/wordpress-db-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Schedule database backup cron job
+  ansible.builtin.cron:
+    name: "WordPress Database Backup"
+    minute: "{{ wordpress_backup_schedule_minute }}"
+    hour: "{{ wordpress_backup_schedule_hour }}"
+    job: "/usr/local/bin/wordpress-db-backup.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_backups | bool
+
+- name: Configure database log rotation
+  ansible.builtin.template:
+    src: mysql-logrotate.j2
+    dest: /etc/logrotate.d/mysql-wordpress
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_logrotate_enabled | bool
+
+- name: Secure MySQL installation - reload privilege tables
+  ansible.builtin.mysql_query:
+    query: "FLUSH PRIVILEGES"
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+  when: not wordpress_use_external_db | bool
+
+- name: Test database connection
+  ansible.builtin.mysql_query:
+    query: "SELECT 1"
+    login_host: "{{ wordpress_db_host }}"
+    login_port: "{{ wordpress_db_port }}"
+    login_user: "{{ wordpress_db_user }}"
+    login_password: "{{ wordpress_db_password }}"
+    login_db: "{{ wordpress_db_name }}"
+  register: db_connection_test
+  changed_when: false
+
+- name: Display database connection status
+  ansible.builtin.debug:
+    msg: "Database connection successful"
+  when: db_connection_test is succeeded
+
+- name: Enable slow query log
+  ansible.builtin.mysql_query:
+    query: |
+      SET GLOBAL slow_query_log = 'ON';
+      SET GLOBAL slow_query_log_file = '/var/log/mysql/slow.log';
+      SET GLOBAL long_query_time = 2;
+    login_user: root
+    login_password: "{{ wordpress_db_root_password }}"
+  become: true
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_enable_logging | bool
+
+- name: Configure external database SSL (if enabled)
+  when:
+    - wordpress_use_external_db | bool
+    - wordpress_external_db_ssl_enabled | bool
+  block:
+    - name: Create SSL certificate directory
+      ansible.builtin.file:
+        path: /etc/mysql/ssl
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: '0750'
+      become: true
+
+    - name: Copy database SSL certificates
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: mysql
+        group: mysql
+        mode: '0640'
+      become: true
+      loop:
+        - { src: "{{ wordpress_external_db_ssl_ca }}", dest: "/etc/mysql/ssl/ca.pem" }
+        - { src: "{{ wordpress_external_db_ssl_cert }}", dest: "/etc/mysql/ssl/client-cert.pem" }
+        - { src: "{{ wordpress_external_db_ssl_key }}", dest: "/etc/mysql/ssl/client-key.pem" }
+      when:
+        - item.src != ""
+        - item.src is defined
+
+  when:
+    - wordpress_use_external_db | bool
+    - wordpress_external_db_ssl_enabled | bool
+
+- name: Create database monitoring script
+  ansible.builtin.template:
+    src: database-monitor.sh.j2
+    dest: /usr/local/bin/wordpress-db-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule database monitoring
+  ansible.builtin.cron:
+    name: "WordPress Database Monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/wordpress-db-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool

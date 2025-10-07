@@ -1,1 +1,306 @@
+---
+# Firewall Configuration Tasks
 
+- name: Install UFW firewall (Debian/Ubuntu)
+  ansible.builtin.package:
+    name: ufw
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Install firewalld (RedHat/CentOS)
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+
+- name: Start and enable firewalld (RedHat/CentOS)
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+
+- name: Reset UFW to defaults (Debian/Ubuntu)
+  community.general.ufw:
+    state: reset
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Set UFW default policies (Debian/Ubuntu)
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  become: true
+  loop:
+    - { direction: "incoming", policy: "deny" }
+    - { direction: "outgoing", policy: "allow" }
+    - { direction: "routed", policy: "deny" }
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Allow SSH access (UFW)
+  community.general.ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Allow SSH access (firewalld)
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+
+- name: Allow HTTP traffic (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ wordpress_http_port }}"
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Allow HTTP traffic (firewalld)
+  ansible.posix.firewalld:
+    service: "{{ wordpress_firewall_http_service }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+
+- name: Allow HTTPS traffic (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ wordpress_https_port }}"
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_ssl | bool
+
+- name: Allow HTTPS traffic (firewalld)
+  ansible.posix.firewalld:
+    service: "{{ wordpress_firewall_https_service }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_ssl | bool
+
+- name: Allow specific IP addresses (UFW)
+  community.general.ufw:
+    rule: allow
+    src: "{{ item }}"
+  become: true
+  loop: "{{ wordpress_allowed_ips }}"
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - wordpress_allowed_ips | length > 0
+
+- name: Allow specific IP addresses (firewalld)
+  ansible.posix.firewalld:
+    source: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+  loop: "{{ wordpress_allowed_ips }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+    - wordpress_allowed_ips | length > 0
+
+- name: Rate limit SSH connections (UFW)
+  community.general.ufw:
+    rule: limit
+    port: '22'
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Configure rate limiting for HTTP (UFW)
+  community.general.ufw:
+    rule: limit
+    port: "{{ wordpress_http_port }}"
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Configure rate limiting for HTTPS (UFW)
+  community.general.ufw:
+    rule: limit
+    port: "{{ wordpress_https_port }}"
+    proto: tcp
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_ssl | bool
+
+- name: Block common attack ports (UFW)
+  community.general.ufw:
+    rule: deny
+    port: "{{ item }}"
+    proto: tcp
+  become: true
+  loop:
+    - '23'    # Telnet
+    - '135'   # RPC
+    - '139'   # NetBIOS
+    - '445'   # SMB
+    - '1433'  # MSSQL
+    - '3389'  # RDP
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Enable UFW firewall (Debian/Ubuntu)
+  community.general.ufw:
+    state: enabled
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Create firewall status check script
+  ansible.builtin.template:
+    src: firewall-check.sh.j2
+    dest: /usr/local/bin/firewall-check.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_configure_firewall | bool
+
+- name: Schedule firewall status monitoring
+  ansible.builtin.cron:
+    name: "Firewall Status Check"
+    minute: "*/10"
+    job: "/usr/local/bin/firewall-check.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_logging | bool
+
+- name: Configure UFW logging
+  community.general.ufw:
+    logging: 'medium'
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_logging | bool
+
+- name: Configure firewalld logging (RedHat/CentOS)
+  ansible.builtin.command:
+    cmd: firewall-cmd --set-log-denied=all --permanent
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_logging | bool
+  changed_when: false
+
+- name: Reload firewalld configuration (RedHat/CentOS)
+  ansible.builtin.command:
+    cmd: firewall-cmd --reload
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+  changed_when: false
+
+- name: Check UFW status
+  ansible.builtin.command:
+    cmd: ufw status verbose
+  register: ufw_status
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+  changed_when: false
+
+- name: Display UFW status
+  ansible.builtin.debug:
+    var: ufw_status.stdout_lines
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+    - ufw_status.stdout_lines is defined
+
+- name: Check firewalld status
+  ansible.builtin.command:
+    cmd: firewall-cmd --list-all
+  register: firewalld_status
+  become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+  changed_when: false
+
+- name: Display firewalld status
+  ansible.builtin.debug:
+    var: firewalld_status.stdout_lines
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_configure_firewall | bool
+    - firewalld_status.stdout_lines is defined
+
+- name: Create firewall backup script
+  ansible.builtin.template:
+    src: firewall-backup.sh.j2
+    dest: /usr/local/bin/firewall-backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_configure_firewall | bool
+
+- name: Schedule firewall configuration backup
+  ansible.builtin.cron:
+    name: "Backup Firewall Configuration"
+    minute: "0"
+    hour: "2"
+    job: "/usr/local/bin/firewall-backup.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_configure_firewall | bool
+    - wordpress_enable_backups | bool

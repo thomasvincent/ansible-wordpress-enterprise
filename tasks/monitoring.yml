@@ -1,1 +1,414 @@
+---
+# Monitoring Configuration Tasks
 
+- name: Install monitoring packages
+  ansible.builtin.package:
+    name:
+      - htop
+      - iotop
+      - nethogs
+      - vnstat
+      - sysstat
+    state: present
+    update_cache: "{{ wordpress_update_cache | bool }}"
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Enable and start sysstat service
+  ansible.builtin.service:
+    name: sysstat
+    state: started
+    enabled: true
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring scripts directory
+  ansible.builtin.file:
+    path: /usr/local/bin/monitoring
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create system monitoring script
+  ansible.builtin.template:
+    src: system-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/system-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create WordPress health check script
+  ansible.builtin.template:
+    src: wordpress-health-check.sh.j2
+    dest: /usr/local/bin/monitoring/wordpress-health-check.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create database monitoring script
+  ansible.builtin.template:
+    src: database-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/database-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create web server monitoring script
+  ansible.builtin.template:
+    src: "{{ wordpress_web_server }}-monitor.sh.j2"
+    dest: "/usr/local/bin/monitoring/{{ wordpress_web_server }}-monitor.sh"
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create PHP-FPM monitoring script
+  ansible.builtin.template:
+    src: php-fpm-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/php-fpm-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create cache monitoring script
+  ansible.builtin.template:
+    src: cache-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/cache-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - wordpress_enable_logging | bool
+    - wordpress_enable_redis | bool or wordpress_enable_memcached | bool
+
+- name: Create disk usage monitoring script
+  ansible.builtin.template:
+    src: disk-usage-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/disk-usage-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create network monitoring script
+  ansible.builtin.template:
+    src: network-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/network-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create performance monitoring script
+  ansible.builtin.template:
+    src: performance-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/performance-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create log analysis script
+  ansible.builtin.template:
+    src: log-analysis.sh.j2
+    dest: /usr/local/bin/monitoring/log-analysis.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring master script
+  ansible.builtin.template:
+    src: monitoring-master.sh.j2
+    dest: /usr/local/bin/wordpress-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule system monitoring
+  ansible.builtin.cron:
+    name: "WordPress System Monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/monitoring/system-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule WordPress health checks
+  ansible.builtin.cron:
+    name: "WordPress Health Check"
+    minute: "*/2"
+    job: "/usr/local/bin/monitoring/wordpress-health-check.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule database monitoring
+  ansible.builtin.cron:
+    name: "WordPress Database Monitoring"
+    minute: "*/10"
+    job: "/usr/local/bin/monitoring/database-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule web server monitoring
+  ansible.builtin.cron:
+    name: "{{ wordpress_web_server | title }} Monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/monitoring/{{ wordpress_web_server }}-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule PHP-FPM monitoring
+  ansible.builtin.cron:
+    name: "PHP-FPM Monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/monitoring/php-fpm-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule cache monitoring
+  ansible.builtin.cron:
+    name: "WordPress Cache Monitoring"
+    minute: "*/5"
+    job: "/usr/local/bin/monitoring/cache-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_logging | bool
+    - wordpress_enable_redis | bool or wordpress_enable_memcached | bool
+
+- name: Schedule disk usage monitoring
+  ansible.builtin.cron:
+    name: "Disk Usage Monitoring"
+    minute: "0"
+    hour: "*/4"
+    job: "/usr/local/bin/monitoring/disk-usage-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule performance monitoring
+  ansible.builtin.cron:
+    name: "WordPress Performance Monitoring"
+    minute: "0"
+    hour: "*/2"
+    job: "/usr/local/bin/monitoring/performance-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule daily log analysis
+  ansible.builtin.cron:
+    name: "Daily Log Analysis"
+    minute: "0"
+    hour: "6"
+    job: "/usr/local/bin/monitoring/log-analysis.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring configuration file
+  ansible.builtin.template:
+    src: monitoring.conf.j2
+    dest: /etc/wordpress-monitoring.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring log directory
+  ansible.builtin.file:
+    path: "{{ wordpress_log_dir }}/monitoring"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Configure monitoring log rotation
+  ansible.builtin.template:
+    src: monitoring-logrotate.j2
+    dest: /etc/logrotate.d/wordpress-monitoring
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when:
+    - wordpress_enable_logging | bool
+    - wordpress_logrotate_enabled | bool
+
+- name: Create alert notification script
+  ansible.builtin.template:
+    src: alert-notify.sh.j2
+    dest: /usr/local/bin/monitoring/alert-notify.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - wordpress_enable_logging | bool
+    - wordpress_smtp_enabled | bool
+
+- name: Create uptime monitoring script
+  ansible.builtin.template:
+    src: uptime-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/uptime-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule uptime monitoring
+  ansible.builtin.cron:
+    name: "WordPress Uptime Monitoring"
+    minute: "*/1"
+    job: "/usr/local/bin/monitoring/uptime-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create response time monitoring script
+  ansible.builtin.template:
+    src: response-time-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/response-time-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule response time monitoring
+  ansible.builtin.cron:
+    name: "WordPress Response Time Monitoring"
+    minute: "*/3"
+    job: "/usr/local/bin/monitoring/response-time-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create security monitoring script
+  ansible.builtin.template:
+    src: security-monitor.sh.j2
+    dest: /usr/local/bin/monitoring/security-monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule security monitoring
+  ansible.builtin.cron:
+    name: "WordPress Security Monitoring"
+    minute: "*/15"
+    job: "/usr/local/bin/monitoring/security-monitor.sh"
+    user: root
+    state: present
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring dashboard script
+  ansible.builtin.template:
+    src: monitoring-dashboard.sh.j2
+    dest: /usr/local/bin/wordpress-dashboard.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create monitoring report generator
+  ansible.builtin.template:
+    src: monitoring-report.sh.j2
+    dest: /usr/local/bin/monitoring/monitoring-report.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Schedule weekly monitoring report
+  ansible.builtin.cron:
+    name: "Weekly WordPress Monitoring Report"
+    minute: "0"
+    hour: "8"
+    weekday: "1"
+    job: "/usr/local/bin/monitoring/monitoring-report.sh"
+    user: root
+    state: present
+  become: true
+  when:
+    - wordpress_enable_logging | bool
+    - wordpress_smtp_enabled | bool
+
+- name: Test monitoring scripts
+  ansible.builtin.command:
+    cmd: "/usr/local/bin/monitoring/{{ item }}"
+  become: true
+  loop:
+    - system-monitor.sh
+    - wordpress-health-check.sh
+  when: wordpress_enable_logging | bool
+  register: monitoring_test
+  changed_when: false
+  ignore_errors: true
+
+- name: Display monitoring test results
+  ansible.builtin.debug:
+    msg: "Monitoring scripts test: {{ 'PASSED' if item.rc == 0 else 'FAILED - ' + item.stderr }}"
+  loop: "{{ monitoring_test.results | default([]) }}"
+  when:
+    - wordpress_enable_logging | bool
+    - monitoring_test is defined
+
+- name: Display monitoring configuration summary
+  ansible.builtin.debug:
+    msg: |
+      WordPress Monitoring Configuration Summary:
+      - System Monitoring: Every 5 minutes
+      - Health Checks: Every 2 minutes
+      - Database Monitoring: Every 10 minutes
+      - Performance Monitoring: Every 2 hours
+      - Log Analysis: Daily at 06:00
+      - Security Monitoring: Every 15 minutes
+      - Uptime Monitoring: Every minute
+      - Response Time Monitoring: Every 3 minutes
+      - Weekly Reports: Monday at 08:00
+      - Log Directory: {{ wordpress_log_dir }}/monitoring
+  when: wordpress_enable_logging | bool

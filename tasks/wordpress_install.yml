@@ -1,1 +1,308 @@
+---
+# WordPress Installation Tasks
 
+- name: Create WordPress system user
+  ansible.builtin.user:
+    name: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    system: true
+    shell: /bin/bash
+    home: "{{ wordpress_install_dir }}"
+    create_home: false
+    state: present
+  become: true
+
+- name: Create WordPress system group
+  ansible.builtin.group:
+    name: "{{ wordpress_system_group }}"
+    system: true
+    state: present
+  become: true
+
+- name: Create WordPress installation directory
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: "{{ wordpress_dir_permissions }}"
+  become: true
+
+- name: Create temporary download directory
+  ansible.builtin.file:
+    path: "/tmp/wordpress-download"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Download WordPress
+  ansible.builtin.get_url:
+    url: "{{ wordpress_download_url }}"
+    dest: "/tmp/wordpress-download/wordpress.tar.gz"
+    mode: '0644'
+    timeout: 300
+  become: true
+  register: wordpress_download
+  when: wordpress_version != "latest"
+
+- name: Download latest WordPress
+  ansible.builtin.get_url:
+    url: "https://wordpress.org/latest.tar.gz"
+    dest: "/tmp/wordpress-download/wordpress.tar.gz"
+    mode: '0644'
+    timeout: 300
+  become: true
+  register: wordpress_download_latest
+  when: wordpress_version == "latest"
+
+- name: Extract WordPress archive
+  ansible.builtin.unarchive:
+    src: "/tmp/wordpress-download/wordpress.tar.gz"
+    dest: "/tmp/wordpress-download"
+    remote_src: true
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+  become: true
+
+- name: Check if WordPress is already installed
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+  register: wordpress_installed
+
+- name: Copy WordPress files to installation directory
+  ansible.builtin.copy:
+    src: "/tmp/wordpress-download/wordpress/"
+    dest: "{{ wordpress_install_dir }}/"
+    remote_src: true
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: preserve
+  become: true
+  when: not wordpress_installed.stat.exists
+
+- name: Set proper ownership for WordPress files
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    recurse: true
+  become: true
+
+- name: Set proper permissions for WordPress directories
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    file_type: directory
+    recurse: true
+  register: wordpress_directories
+
+- name: Apply directory permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_dir_permissions }}"
+  become: true
+  loop: "{{ wordpress_directories.files }}"
+
+- name: Set proper permissions for WordPress files
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    file_type: file
+    recurse: true
+  register: wordpress_files
+
+- name: Apply file permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ wordpress_file_permissions }}"
+  become: true
+  loop: "{{ wordpress_files.files }}"
+
+- name: Create wp-content uploads directory
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/uploads"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  become: true
+
+- name: Create wp-content cache directory
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/cache"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  become: true
+
+- name: Create wp-content upgrade directory
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/upgrade"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  become: true
+
+- name: Set special permissions for wp-config.php (if exists)
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0600'
+  become: true
+  when: wordpress_installed.stat.exists
+
+- name: Download and install WP-CLI
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/wp-cli/wp-cli/v{{ wordpress_wpcli_version | default('2.9.0') }}/utils/wp-cli.phar"
+    dest: /usr/local/bin/wp
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_wpcli_version != "latest"
+
+- name: Download and install latest WP-CLI
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/wp-cli/wp-cli/v2/utils/wp-cli.phar"
+    dest: /usr/local/bin/wp
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+  when:
+    - wordpress_install_wpcli | bool
+    - wordpress_wpcli_version == "latest"
+
+- name: Verify WP-CLI installation
+  ansible.builtin.command:
+    cmd: wp --info
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wpcli_info
+  changed_when: false
+  when: wordpress_install_wpcli | bool
+
+- name: Display WP-CLI info
+  ansible.builtin.debug:
+    var: wpcli_info.stdout_lines
+  when:
+    - wordpress_install_wpcli | bool
+    - wpcli_info.stdout_lines is defined
+
+- name: Create WordPress log directory
+  ansible.builtin.file:
+    path: "{{ wordpress_log_dir }}"
+    state: directory
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0755'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create WordPress error log file
+  ansible.builtin.file:
+    path: "{{ wordpress_error_log }}"
+    state: touch
+    owner: "{{ wordpress_php_fpm_user }}"
+    group: "{{ wordpress_php_fpm_group }}"
+    mode: '0644'
+  become: true
+  when: wordpress_enable_logging | bool
+
+- name: Create .htaccess file for Apache
+  ansible.builtin.template:
+    src: htaccess.j2
+    dest: "{{ wordpress_install_dir }}/.htaccess"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+    backup: true
+  become: true
+  when: wordpress_web_server == "apache"
+
+- name: Create robots.txt file
+  ansible.builtin.template:
+    src: robots.txt.j2
+    dest: "{{ wordpress_install_dir }}/robots.txt"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+
+- name: Remove WordPress installation files
+  ansible.builtin.file:
+    path: "/tmp/wordpress-download"
+    state: absent
+  become: true
+
+- name: Check WordPress installation status
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-includes/version.php"
+  register: wordpress_version_file
+
+- name: Get WordPress version
+  ansible.builtin.shell: |
+    grep "wp_version =" {{ wordpress_install_dir }}/wp-includes/version.php | cut -d"'" -f2
+  register: installed_wp_version
+  become: true
+  when: wordpress_version_file.stat.exists
+  changed_when: false
+
+- name: Display installed WordPress version
+  ansible.builtin.debug:
+    msg: "WordPress {{ installed_wp_version.stdout }} installed successfully"
+  when:
+    - wordpress_version_file.stat.exists
+    - installed_wp_version.stdout is defined
+
+- name: Create WordPress cron disable file
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/mu-plugins"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0755'
+  become: true
+  when: wordpress_disable_wp_cron | bool
+
+- name: Disable WordPress internal cron
+  ansible.builtin.copy:
+    content: |
+      <?php
+      // Disable WordPress internal cron
+      define('DISABLE_WP_CRON', true);
+    dest: "{{ wordpress_install_dir }}/wp-content/mu-plugins/disable-wp-cron.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
+  when: wordpress_disable_wp_cron | bool
+
+- name: Set up system cron for WordPress
+  ansible.builtin.cron:
+    name: "WordPress Cron"
+    minute: "{{ wordpress_cron_schedule.split()[0] }}"
+    hour: "{{ wordpress_cron_schedule.split()[1] }}"
+    day: "{{ wordpress_cron_schedule.split()[2] }}"
+    month: "{{ wordpress_cron_schedule.split()[3] }}"
+    weekday: "{{ wordpress_cron_schedule.split()[4] }}"
+    job: "cd {{ wordpress_install_dir }} && wp cron event run --due-now --path={{ wordpress_install_dir }}"
+    user: "{{ wordpress_system_user }}"
+    state: present
+  become: true
+  when:
+    - wordpress_system_cron_enabled | bool
+    - wordpress_install_wpcli | bool
+
+- name: Create WordPress maintenance mode file template
+  ansible.builtin.template:
+    src: maintenance.php.j2
+    dest: "{{ wordpress_install_dir }}/maintenance-template.php"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0644'
+  become: true
