@@ -1,0 +1,10 @@
+---
+use_default_rules: true
+skip_list:
+  - yaml[line-length]  # Allow long lines
+  - name[missing]  # Allow tasks without names during development
+
+exclude_paths:
+  - .github/
+  - .cache/
+  - molecule/  # Molecule tests are run separately
