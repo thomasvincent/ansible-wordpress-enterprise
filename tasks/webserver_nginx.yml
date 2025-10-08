@@ -26,7 +26,7 @@
     group: root
     mode: '0644'
   become: true
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Enable WordPress site
   ansible.builtin.file:
@@ -34,7 +34,7 @@
     dest: /etc/nginx/sites-enabled/wordpress
     state: link
   become: true
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Remove default Nginx site
   ansible.builtin.file:
@@ -44,7 +44,7 @@
     - /etc/nginx/sites-enabled/default
     - /etc/nginx/sites-available/default
   become: true
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Configure Nginx main settings
   ansible.builtin.template:
@@ -55,7 +55,7 @@
     mode: '0644'
     backup: true
   become: true
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Create Nginx cache directory
   ansible.builtin.file:

@@ -48,7 +48,7 @@
     group: root
     mode: '0644'
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP settings
   ansible.builtin.lineinfile:
@@ -64,7 +64,7 @@
     - { key: 'max_input_time', value: '{{ wordpress_php_max_input_time | default("600") }}' }
     - { key: 'max_input_vars', value: '{{ wordpress_php_max_input_vars | default("3000") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Enable and start PHP-FPM service
   ansible.builtin.systemd:
