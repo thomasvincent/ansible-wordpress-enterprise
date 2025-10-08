@@ -30,9 +30,8 @@ RUN dnf -y install \
 RUN useradd -m -s /bin/bash molecule && \
     echo "molecule ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/molecule
 
-# Install Ansible (handle PEP 668 for Ubuntu 24.04)
+# Install Ansible (handle PEP 668 for newer Ubuntu)
 {% if item.image == 'ubuntu:24.04' %}
-# Don't upgrade system pip on Ubuntu 24.04 as it causes conflicts
 RUN python3 -m pip install ansible --break-system-packages
 {% else %}
 RUN python3 -m pip install --upgrade pip && \
@@ -40,18 +39,5 @@ RUN python3 -m pip install --upgrade pip && \
 {% endif %}
 
 WORKDIR /tmp
-
-# Clean up
-RUN rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
-
-# Ensure systemd is properly configured for Ubuntu
-{% if item.image.startswith('ubuntu') %}
-RUN systemctl mask systemd-remount-fs.service \
-    dev-hugepages.mount \
-    sys-fs-fuse-connections.mount \
-    systemd-logind.service \
-    getty.target \
-    console-getty.service
-{% endif %}
 
 CMD [{{ item.command }}]
