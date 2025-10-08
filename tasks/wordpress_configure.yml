@@ -39,6 +39,7 @@
     - wordpress_install_wpcli | bool
     - not wordpress_installed.stat.exists
   register: wp_install_result
+  changed_when: "'Success' in wp_install_result.stdout"
 
 - name: Display WordPress installation result
   ansible.builtin.debug:
@@ -91,6 +92,9 @@
   changed_when: false
 
 - name: Configure multisite (if enabled)
+  when:
+    - wordpress_multisite_enabled | bool
+    - wordpress_install_wpcli | bool
   block:
     - name: Install WordPress multisite
       ansible.builtin.command:
@@ -106,6 +110,8 @@
       become: true
       become_user: "{{ wordpress_system_user }}"
       when: not wordpress_installed.stat.exists
+      register: multisite_install
+      changed_when: "'Success' in multisite_install.stdout"
 
     - name: Configure multisite constants in wp-config.php
       ansible.builtin.blockinfile:
@@ -124,10 +130,6 @@
         backup: true
       become: true
 
-  when:
-    - wordpress_multisite_enabled | bool
-    - wordpress_install_wpcli | bool
-
 - name: Configure additional WordPress constants
   ansible.builtin.blockinfile:
     path: "{{ wordpress_install_dir }}/wp-config.php"
@@ -143,6 +145,10 @@
   when: wordpress_additional_constants | length > 0
 
 - name: Configure WordPress object cache (Redis)
+  when:
+    - wordpress_enable_redis | bool
+    - wordpress_enable_object_cache | bool
+    - wordpress_install_wpcli | bool
   block:
     - name: Install Redis object cache plugin
       ansible.builtin.command:
@@ -152,6 +158,8 @@
           --path="{{ wordpress_install_dir }}"
       become: true
       become_user: "{{ wordpress_system_user }}"
+      register: redis_install
+      changed_when: "'Success' in redis_install.stdout or 'already installed' not in redis_install.stdout"
 
     - name: Enable Redis object cache
       ansible.builtin.command:
@@ -160,6 +168,8 @@
           --path="{{ wordpress_install_dir }}"
       become: true
       become_user: "{{ wordpress_system_user }}"
+      register: redis_enable
+      changed_when: "'Object cache enabled' in redis_enable.stdout"
 
     - name: Add Redis configuration to wp-config.php
       ansible.builtin.blockinfile:
@@ -177,11 +187,6 @@
         insertbefore: "/* That's all, stop editing!"
         backup: true
       become: true
-
-  when:
-    - wordpress_enable_redis | bool
-    - wordpress_enable_object_cache | bool
-    - wordpress_install_wpcli | bool
 
 - name: Configure WordPress CDN settings
   ansible.builtin.blockinfile:
@@ -229,7 +234,7 @@
     insertbefore: "/* That's all, stop editing!"
     backup: true
   become: true
-  when: wordpress_debug | bool == false
+  when: not wordpress_debug | bool
 
 - name: Configure WordPress file editing restrictions
   ansible.builtin.blockinfile:
