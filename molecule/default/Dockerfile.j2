@@ -5,14 +5,10 @@ FROM {{ item.image }}
 {% if item.image.startswith('ubuntu') %}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3-minimal \
+    python3 \
     python3-pip \
-    python3-setuptools \
-    python3-apt \
     sudo \
-    systemd \
-    systemd-sysv \
-    build-essential \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 {% elif item.image.startswith('rockylinux') or item.image.startswith('centos') %}
@@ -20,15 +16,10 @@ RUN dnf -y install \
     python3 \
     python3-pip \
     sudo \
-    which \
-    systemd \
+    bash \
     && dnf clean all
 
 {% endif %}
-
-# Create molecule user
-RUN useradd -m -s /bin/bash molecule && \
-    echo "molecule ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/molecule
 
 # Install Ansible (handle PEP 668 for newer Ubuntu)
 {% if item.image == 'ubuntu:24.04' %}
@@ -40,4 +31,5 @@ RUN python3 -m pip install --upgrade pip && \
 
 WORKDIR /tmp
 
-CMD [{{ item.command }}]
+# Keep container running
+CMD ["sleep", "infinity"]
