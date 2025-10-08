@@ -246,7 +246,10 @@
 
 - name: Get WordPress version
   ansible.builtin.shell: |
+    set -o pipefail
     grep "wp_version =" {{ wordpress_install_dir }}/wp-includes/version.php | cut -d"'" -f2
+  args:
+    executable: /bin/bash
   register: installed_wp_version
   become: true
   when: wordpress_version_file.stat.exists

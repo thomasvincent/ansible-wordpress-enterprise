@@ -306,6 +306,9 @@
       </IfModule>
     insertafter: "# BEGIN WordPress"
     create: true
+    mode: '0644'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
   become: true
   when:
     - wordpress_web_server == "apache"
@@ -324,6 +327,9 @@
       </IfModule>
     insertbefore: "# BEGIN WordPress"
     create: true
+    mode: '0644'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
   become: true
   when:
     - wordpress_web_server == "apache"
