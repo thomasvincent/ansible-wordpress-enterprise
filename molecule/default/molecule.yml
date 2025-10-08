@@ -60,10 +60,13 @@ provisioner:
   inventory:
     host_vars:
       ubuntu-22:
+        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
       ubuntu-24:
+        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
       rocky-9:
+        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
   playbooks:
     prepare: prepare.yml
