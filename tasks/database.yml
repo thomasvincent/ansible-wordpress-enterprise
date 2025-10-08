@@ -82,7 +82,7 @@
   community.mysql.mysql_db:
     name: "{{ wordpress_db_name }}"
     state: present
-    charset: "{{ wordpress_db_charset }}"
+    encoding: "{{ wordpress_db_charset }}"
     collation: "{{ wordpress_db_collate }}"
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
@@ -204,6 +204,9 @@
     - wordpress_enable_logging | bool
 
 - name: Configure external database SSL (if enabled)
+  when:
+    - wordpress_use_external_db | bool
+    - wordpress_external_db_ssl_enabled | bool
   block:
     - name: Create SSL certificate directory
       ansible.builtin.file:
@@ -229,10 +232,6 @@
       when:
         - item.src != ""
         - item.src is defined
-
-  when:
-    - wordpress_use_external_db | bool
-    - wordpress_external_db_ssl_enabled | bool
 
 - name: Create database monitoring script
   ansible.builtin.template:
