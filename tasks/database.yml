@@ -204,9 +204,6 @@
     - wordpress_enable_logging | bool
 
 - name: Configure external database SSL (if enabled)
-  when:
-    - wordpress_use_external_db | bool
-    - wordpress_external_db_ssl_enabled | bool
   block:
     - name: Create SSL certificate directory
       ansible.builtin.file:
