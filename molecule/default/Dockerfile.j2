@@ -32,8 +32,8 @@ RUN useradd -m -s /bin/bash molecule && \
 
 # Install Ansible (handle PEP 668 for Ubuntu 24.04)
 {% if item.image == 'ubuntu:24.04' %}
-RUN python3 -m pip install --upgrade pip --break-system-packages && \
-    python3 -m pip install ansible --break-system-packages
+# Don't upgrade system pip on Ubuntu 24.04 as it causes conflicts
+RUN python3 -m pip install ansible --break-system-packages
 {% else %}
 RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install ansible
