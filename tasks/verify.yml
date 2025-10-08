@@ -68,7 +68,9 @@
 
 - name: Verify web server is running
   ansible.builtin.debug:
-    msg: "{{ wordpress_web_server | title }} status: {{ ansible_facts.services[wordpress_web_server_service[wordpress_web_server] + '.service'].state }}"
+    msg: >-
+      {{ wordpress_web_server | title }} status:
+      {{ ansible_facts.services[wordpress_web_server_service[wordpress_web_server] + '.service'].state }}
   when: (wordpress_web_server_service[wordpress_web_server] + '.service') in ansible_facts.services
 
 - name: Test HTTP response
@@ -122,7 +124,9 @@
 
 - name: Verify database service is running
   ansible.builtin.debug:
-    msg: "{{ wordpress_db_engine | title }} status: {{ ansible_facts.services[wordpress_db_service[wordpress_db_engine] + '.service'].state }}"
+    msg: >-
+      {{ wordpress_db_engine | title }} status:
+      {{ ansible_facts.services[wordpress_db_service[wordpress_db_engine] + '.service'].state }}
   when:
     - not wordpress_use_external_db | bool
     - (wordpress_db_service[wordpress_db_engine] + '.service') in ansible_facts.services
@@ -187,7 +191,9 @@
 
 - name: Display Let's Encrypt certificate status
   ansible.builtin.debug:
-    msg: "Let's Encrypt certificate: {{ 'FOUND' if wordpress_server_name in letsencrypt_cert_check.stdout else 'NOT FOUND' }}"
+    msg: >-
+      Let's Encrypt certificate:
+      {{ 'FOUND' if wordpress_server_name in letsencrypt_cert_check.stdout else 'NOT FOUND' }}
   when:
     - wordpress_enable_ssl | bool
     - wordpress_use_letsencrypt | bool
@@ -258,7 +264,9 @@
 
 - name: Display active plugins count
   ansible.builtin.debug:
-    msg: "Active WordPress plugins: {{ (wp_plugins_check.stdout_lines | length - 1) if wp_plugins_check.stdout_lines is defined else 0 }}"
+    msg: >-
+      Active WordPress plugins:
+      {{ (wp_plugins_check.stdout_lines | length - 1) if wp_plugins_check.stdout_lines is defined else 0 }}
   when:
     - wordpress_install_wpcli | bool
     - wp_plugins_check is defined
@@ -277,7 +285,11 @@
 
 - name: Display active theme
   ansible.builtin.debug:
-    msg: "Active WordPress theme: {{ wp_themes_check.stdout_lines[1].split()[0] if wp_themes_check.stdout_lines is defined and wp_themes_check.stdout_lines | length > 1 else 'Unknown' }}"
+    msg: >-
+      Active WordPress theme:
+      {{ wp_themes_check.stdout_lines[1].split()[0]
+         if wp_themes_check.stdout_lines is defined and wp_themes_check.stdout_lines | length > 1
+         else 'Unknown' }}
   when:
     - wordpress_install_wpcli | bool
     - wp_themes_check is defined
@@ -296,7 +308,9 @@
 
 - name: Display WordPress update status
   ansible.builtin.debug:
-    msg: "WordPress updates: {{ 'AVAILABLE' if wp_updates_check.rc == 0 and wp_updates_check.stdout != '' else 'UP TO DATE' }}"
+    msg: >-
+      WordPress updates:
+      {{ 'AVAILABLE' if wp_updates_check.rc == 0 and wp_updates_check.stdout != '' else 'UP TO DATE' }}
   when:
     - wordpress_install_wpcli | bool
     - wp_updates_check is defined
@@ -309,7 +323,9 @@
 
 - name: Display disk usage
   ansible.builtin.debug:
-    msg: "Disk usage for WordPress directory: {{ disk_usage_check.stdout_lines[1].split()[4] if disk_usage_check.stdout_lines is defined else 'Unknown' }}"
+    msg: >-
+      Disk usage for WordPress directory:
+      {{ disk_usage_check.stdout_lines[1].split()[4] if disk_usage_check.stdout_lines is defined else 'Unknown' }}
 
 - name: Check file permissions
   ansible.builtin.stat:

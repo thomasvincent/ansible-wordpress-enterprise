@@ -22,7 +22,9 @@
   community.mysql.mysql_user:
     name: root
     password: "{{ wordpress_db_root_password }}"
-    login_unix_socket: "{{ '/var/run/mysqld/mysqld.sock' if ansible_os_family == 'Debian' else '/var/lib/mysql/mysql.sock' }}"
+    login_unix_socket: >-
+      {{ '/var/run/mysqld/mysqld.sock' if ansible_os_family == 'Debian'
+         else '/var/lib/mysql/mysql.sock' }}
     state: present
   become: true
   when:
@@ -102,7 +104,9 @@
 - name: Configure MySQL/MariaDB for WordPress
   ansible.builtin.template:
     src: mysql-wordpress.cnf.j2
-    dest: "{{ '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian' else '/etc/my.cnf.d/wordpress.cnf' }}"
+    dest: >-
+      {{ '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian'
+         else '/etc/my.cnf.d/wordpress.cnf' }}
     owner: root
     group: root
     mode: '0644'
@@ -113,8 +117,12 @@
 
 - name: Optimize MySQL/MariaDB configuration
   ansible.builtin.template:
-    src: "{{ 'mysql-optimization.cnf.j2' if wordpress_db_engine == 'mysql' else 'mariadb-optimization.cnf.j2' }}"
-    dest: "{{ '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian' else '/etc/my.cnf.d/optimization.cnf' }}"
+    src: >-
+      {{ 'mysql-optimization.cnf.j2' if wordpress_db_engine == 'mysql'
+         else 'mariadb-optimization.cnf.j2' }}
+    dest: >-
+      {{ '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian'
+         else '/etc/my.cnf.d/optimization.cnf' }}
     owner: root
     group: root
     mode: '0644'
