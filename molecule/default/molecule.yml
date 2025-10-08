@@ -12,43 +12,22 @@ platforms:
     image: ubuntu:22.04
     dockerfile: ../default/Dockerfile.j2
     pre_build_image: false
-    command: /lib/systemd/systemd
-    privileged: true
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    tmpfs:
-      - /run
-      - /run/lock
-    capabilities:
-      - SYS_ADMIN
+    command: sleep infinity
+    privileged: false
   
   - name: ubuntu-24
     image: ubuntu:24.04
     dockerfile: ../default/Dockerfile.j2
     pre_build_image: false
-    command: /lib/systemd/systemd
-    privileged: true
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    tmpfs:
-      - /run
-      - /run/lock
-    capabilities:
-      - SYS_ADMIN
+    command: sleep infinity
+    privileged: false
   
   - name: rocky-9
     image: rockylinux:9
     dockerfile: ../default/Dockerfile.j2
     pre_build_image: false
-    command: /usr/sbin/init
-    privileged: true
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    tmpfs:
-      - /run
-      - /run/lock
-    capabilities:
-      - SYS_ADMIN
+    command: sleep infinity
+    privileged: false
 
 provisioner:
   name: ansible
@@ -60,13 +39,10 @@ provisioner:
   inventory:
     host_vars:
       ubuntu-22:
-        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
       ubuntu-24:
-        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
       rocky-9:
-        ansible_connection: docker
         ansible_python_interpreter: /usr/bin/python3
   playbooks:
     prepare: prepare.yml
