@@ -104,6 +104,9 @@
     line: "tmpfs /run/shm tmpfs defaults,noexec,nosuid 0 0"
     create: true
     backup: true
+    mode: '0644'
+    owner: root
+    group: root
   become: true
 
 - name: Configure kernel security parameters
@@ -172,6 +175,9 @@
   ansible.builtin.blockinfile:
     path: "{{ wordpress_install_dir }}/.htaccess"
     marker: "# {mark} SECURITY HEADERS"
+    mode: '0644'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
     block: |
       # Security Headers
       <IfModule mod_headers.c>
@@ -190,6 +196,9 @@
   ansible.builtin.blockinfile:
     path: "{{ wordpress_install_dir }}/.htaccess"
     marker: "# {mark} PROTECT SENSITIVE FILES"
+    mode: '0644'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
     block: |
       # Protect sensitive files
       <Files wp-config.php>
@@ -217,6 +226,9 @@
   ansible.builtin.blockinfile:
     path: "{{ wordpress_install_dir }}/.htaccess"
     marker: "# {mark} DISABLE XML-RPC"
+    mode: '0644'
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
     block: |
       # Disable XML-RPC
       <Files xmlrpc.php>
