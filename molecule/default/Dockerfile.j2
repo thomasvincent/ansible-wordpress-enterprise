@@ -44,4 +44,14 @@ WORKDIR /tmp
 # Clean up
 RUN rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
+# Ensure systemd is properly configured for Ubuntu
+{% if item.image.startswith('ubuntu') %}
+RUN systemctl mask systemd-remount-fs.service \
+    dev-hugepages.mount \
+    sys-fs-fuse-connections.mount \
+    systemd-logind.service \
+    getty.target \
+    console-getty.service
+{% endif %}
+
 CMD [{{ item.command }}]
