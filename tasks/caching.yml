@@ -169,7 +169,11 @@
 - name: Configure PHP OPcache
   ansible.builtin.template:
     src: opcache.ini.j2
-    dest: "{{ '/etc/php/' + wordpress_php_version + '/mods-available/opcache.ini' if ansible_os_family == 'Debian' else '/etc/php.d/10-opcache.ini' }}"
+    dest: >-
+      {{ '/etc/php/' + wordpress_php_version +
+      '/mods-available/opcache.ini'
+      if ansible_os_family == 'Debian'
+      else '/etc/php.d/10-opcache.ini' }}
     owner: root
     group: root
     mode: '0644'

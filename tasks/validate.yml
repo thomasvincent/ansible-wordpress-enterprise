@@ -1,1 +1,379 @@
+---
+# Input Validation and Prerequisite Verification Tasks
+# This file handles comprehensive validation of configuration variables and system prerequisites
 
+# ============================================================================
+# Basic System Validation
+# ============================================================================
+
+- name: Validate operating system compatibility
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'RedHat']
+      - ansible_distribution in ['Ubuntu', 'Debian', 'CentOS', 'RHEL', 'Rocky', 'AlmaLinux']
+    fail_msg: "Unsupported operating system: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+    success_msg: "Operating system validation passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+- name: Validate system architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in ['x86_64', 'aarch64', 'armv7l']
+    fail_msg: "Unsupported architecture: {{ ansible_architecture }}"
+    success_msg: "Architecture validation passed: {{ ansible_architecture }}"
+
+- name: Check minimum system requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_memtotal_mb >= 512
+      - ansible_processor_vcpus >= 1
+    fail_msg: "System does not meet minimum requirements (512MB RAM, 1 CPU core)"
+    success_msg: "System requirements check passed"
+
+- name: Validate disk space requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 2147483648  # 2GB
+    fail_msg: "Insufficient disk space. At least 2GB free space required on root filesystem"
+    success_msg: "Disk space validation passed"
+  when: ansible_mounts is defined
+
+# ============================================================================
+# WordPress Configuration Validation
+# ============================================================================
+
+- name: Validate WordPress version format
+  ansible.builtin.assert:
+    that:
+      - wordpress_version is defined
+      - wordpress_version is string
+      - wordpress_version == 'latest' or wordpress_version is regex('^[0-9]+\.[0-9]+(\.[0-9]+)?$')
+    fail_msg: "Invalid WordPress version format: {{ wordpress_version | default('undefined') }}"
+    success_msg: "WordPress version validation passed"
+
+- name: Validate WordPress installation directory
+  ansible.builtin.assert:
+    that:
+      - wordpress_install_dir is defined
+      - wordpress_install_dir is string
+      - wordpress_install_dir is match('^/.+')
+      - wordpress_install_dir != '/'
+    fail_msg: "Invalid WordPress installation directory: {{ wordpress_install_dir | default('undefined') }}"
+    success_msg: "WordPress installation directory validation passed"
+
+- name: Validate WordPress admin credentials
+  ansible.builtin.assert:
+    that:
+      - wordpress_admin_user is defined
+      - wordpress_admin_user is string
+      - wordpress_admin_user | length >= 3
+      - wordpress_admin_password is defined
+      - wordpress_admin_password is string
+      - wordpress_admin_password | length >= 8
+      - wordpress_admin_email is defined
+      - wordpress_admin_email is match('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    fail_msg: "Invalid WordPress admin credentials. User must be 3+ chars, password 8+ chars, valid email required"
+    success_msg: "WordPress admin credentials validation passed"
+
+- name: Validate WordPress site configuration
+  ansible.builtin.assert:
+    that:
+      - wordpress_site_title is defined
+      - wordpress_site_title is string
+      - wordpress_site_title | length > 0
+      - wordpress_site_url is defined
+      - wordpress_site_url is string
+      - wordpress_site_url is match('^https?://.+')
+    fail_msg: "Invalid WordPress site configuration"
+    success_msg: "WordPress site configuration validation passed"
+
+# ============================================================================
+# Database Configuration Validation
+# ============================================================================
+
+- name: Validate database engine selection
+  ansible.builtin.assert:
+    that:
+      - wordpress_db_engine is defined
+      - wordpress_db_engine in ['mysql', 'mariadb']
+    fail_msg: "Invalid database engine: {{ wordpress_db_engine | default('undefined') }}. Must be 'mysql' or 'mariadb'"
+    success_msg: "Database engine validation passed"
+
+- name: Validate database connection parameters
+  ansible.builtin.assert:
+    that:
+      - wordpress_db_host is defined
+      - wordpress_db_host is string
+      - wordpress_db_host | length > 0
+      - wordpress_db_port is defined
+      - wordpress_db_port is number
+      - wordpress_db_port >= 1
+      - wordpress_db_port <= 65535
+      - wordpress_db_name is defined
+      - wordpress_db_name is string
+      - wordpress_db_name is match('^[a-zA-Z0-9_]+$')
+      - wordpress_db_user is defined
+      - wordpress_db_user is string
+      - wordpress_db_user | length > 0
+      - wordpress_db_password is defined
+      - wordpress_db_password is string
+      - wordpress_db_password | length >= 8
+    fail_msg: "Invalid database configuration parameters"
+    success_msg: "Database configuration validation passed"
+
+- name: Validate database charset and collation
+  ansible.builtin.assert:
+    that:
+      - wordpress_db_charset in ['utf8', 'utf8mb4']
+      - wordpress_db_collate in ['utf8_general_ci', 'utf8_unicode_ci', 'utf8mb4_unicode_ci', 'utf8mb4_general_ci']
+    fail_msg: "Invalid database charset or collation"
+    success_msg: "Database charset/collation validation passed"
+
+# ============================================================================
+# Web Server Configuration Validation
+# ============================================================================
+
+- name: Validate web server selection
+  ansible.builtin.assert:
+    that:
+      - wordpress_web_server is defined
+      - wordpress_web_server in ['nginx', 'apache']
+    fail_msg: "Invalid web server: {{ wordpress_web_server | default('undefined') }}. Must be 'nginx' or 'apache'"
+    success_msg: "Web server selection validation passed"
+
+- name: Validate HTTP/HTTPS ports
+  ansible.builtin.assert:
+    that:
+      - wordpress_http_port is number
+      - wordpress_http_port >= 1
+      - wordpress_http_port <= 65535
+      - wordpress_https_port is number
+      - wordpress_https_port >= 1
+      - wordpress_https_port <= 65535
+      - wordpress_http_port != wordpress_https_port
+    fail_msg: "Invalid HTTP/HTTPS port configuration"
+    success_msg: "HTTP/HTTPS ports validation passed"
+
+# ============================================================================
+# PHP Configuration Validation
+# ============================================================================
+
+- name: Validate PHP version
+  ansible.builtin.assert:
+    that:
+      - wordpress_php_version is defined
+      - wordpress_php_version is string
+      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3']
+    fail_msg: "Invalid or unsupported PHP version: {{ wordpress_php_version | default('undefined') }}"
+    success_msg: "PHP version validation passed"
+
+- name: Validate PHP memory and resource limits
+  ansible.builtin.assert:
+    that:
+      - wordpress_php_memory_limit is match('^[0-9]+[MG]$')
+      - wordpress_php_max_execution_time is number
+      - wordpress_php_max_execution_time >= 30
+      - wordpress_php_upload_max_filesize is match('^[0-9]+[MG]$')
+      - wordpress_php_post_max_size is match('^[0-9]+[MG]$')
+      - wordpress_php_max_input_vars is number
+      - wordpress_php_max_input_vars >= 1000
+    fail_msg: "Invalid PHP configuration parameters"
+    success_msg: "PHP configuration validation passed"
+
+# ============================================================================
+# SSL/TLS Configuration Validation
+# ============================================================================
+
+- name: Validate SSL configuration when enabled
+  ansible.builtin.assert:
+    that:
+      - wordpress_ssl_certificate is defined
+      - wordpress_ssl_certificate is string
+      - wordpress_ssl_certificate | length > 0
+      - wordpress_ssl_certificate_key is defined
+      - wordpress_ssl_certificate_key is string
+      - wordpress_ssl_certificate_key | length > 0
+      - wordpress_ssl_protocols is defined
+      - wordpress_ssl_protocols is string
+    fail_msg: "Invalid SSL configuration when SSL is enabled"
+    success_msg: "SSL configuration validation passed"
+  when: wordpress_enable_ssl | default(true)
+
+- name: Validate Let's Encrypt configuration
+  ansible.builtin.assert:
+    that:
+      - wordpress_letsencrypt_email is defined
+      - wordpress_letsencrypt_email is match('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    fail_msg: "Invalid Let's Encrypt email address"
+    success_msg: "Let's Encrypt configuration validation passed"
+  when: wordpress_use_letsencrypt | default(false)
+
+# ============================================================================
+# Plugin and Theme Validation
+# ============================================================================
+
+- name: Validate plugins configuration
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state | default('present') in ['present', 'absent']
+      - item.version | default('latest') is string
+    fail_msg: "Invalid plugin configuration: {{ item | default('undefined') }}"
+    success_msg: "Plugin configuration validation passed"
+  loop: "{{ wordpress_plugins | default([]) }}"
+  when: wordpress_plugins is defined
+
+- name: Validate themes configuration
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state | default('present') in ['present', 'absent']
+      - item.version | default('latest') is string
+    fail_msg: "Invalid theme configuration: {{ item | default('undefined') }}"
+    success_msg: "Theme configuration validation passed"
+  loop: "{{ wordpress_themes | default([]) }}"
+  when: wordpress_themes is defined
+
+# ============================================================================
+# Caching Configuration Validation
+# ============================================================================
+
+- name: Validate Redis configuration when enabled
+  ansible.builtin.assert:
+    that:
+      - wordpress_redis_host is defined
+      - wordpress_redis_host is string
+      - wordpress_redis_host | length > 0
+      - wordpress_redis_port is number
+      - wordpress_redis_port >= 1
+      - wordpress_redis_port <= 65535
+    fail_msg: "Invalid Redis configuration"
+    success_msg: "Redis configuration validation passed"
+  when: wordpress_enable_redis | default(false)
+
+- name: Validate Memcached configuration when enabled
+  ansible.builtin.assert:
+    that:
+      - wordpress_memcached_servers is defined
+      - wordpress_memcached_servers is iterable
+      - wordpress_memcached_servers | length > 0
+    fail_msg: "Invalid Memcached configuration"
+    success_msg: "Memcached configuration validation passed"
+  when: wordpress_enable_memcached | default(false)
+
+# ============================================================================
+# Security Configuration Validation
+# ============================================================================
+
+- name: Validate WordPress security keys and salts
+  ansible.builtin.assert:
+    that:
+      - item is defined
+      - item is string
+      - item | length >= 32
+    fail_msg: "WordPress security keys/salts must be at least 32 characters long"
+    success_msg: "WordPress security keys validation passed"
+  loop:
+    - "{{ wordpress_auth_key | default('') }}"
+    - "{{ wordpress_secure_auth_key | default('') }}"
+    - "{{ wordpress_logged_in_key | default('') }}"
+    - "{{ wordpress_nonce_key | default('') }}"
+    - "{{ wordpress_auth_salt | default('') }}"
+    - "{{ wordpress_secure_auth_salt | default('') }}"
+    - "{{ wordpress_logged_in_salt | default('') }}"
+    - "{{ wordpress_nonce_salt | default('') }}"
+  no_log: true
+
+# ============================================================================
+# System User and Permissions Validation
+# ============================================================================
+
+- name: Validate system user configuration
+  ansible.builtin.assert:
+    that:
+      - wordpress_system_user is defined
+      - wordpress_system_user is string
+      - wordpress_system_user is match('^[a-z_][a-z0-9_-]*$')
+      - wordpress_system_group is defined
+      - wordpress_system_group is string
+      - wordpress_system_group is match('^[a-z_][a-z0-9_-]*$')
+    fail_msg: "Invalid system user or group configuration"
+    success_msg: "System user configuration validation passed"
+
+- name: Validate file and directory permissions
+  ansible.builtin.assert:
+    that:
+      - wordpress_file_permissions is defined
+      - wordpress_file_permissions is match('^0[0-7]{3}$')
+      - wordpress_dir_permissions is defined
+      - wordpress_dir_permissions is match('^0[0-7]{3}$')
+    fail_msg: "Invalid file or directory permissions format"
+    success_msg: "Permissions validation passed"
+
+# ============================================================================
+# Network Connectivity Validation
+# ============================================================================
+
+- name: Test internet connectivity for WordPress downloads
+  ansible.builtin.uri:
+    url: https://wordpress.org/
+    method: HEAD
+    timeout: 10
+  register: wordpress_connectivity
+  failed_when: false
+  when: wordpress_validate_connectivity | default(true)
+
+- name: Validate WordPress.org connectivity
+  ansible.builtin.assert:
+    that:
+      - wordpress_connectivity.status == 200
+    fail_msg: "Cannot connect to WordPress.org. Check internet connectivity"
+    success_msg: "WordPress.org connectivity verified"
+  when: 
+    - wordpress_validate_connectivity | default(true)
+    - wordpress_connectivity is defined
+
+# ============================================================================
+# External Services Validation
+# ============================================================================
+
+- name: Test database connectivity (external database)
+  ansible.builtin.wait_for:
+    host: "{{ wordpress_db_host }}"
+    port: "{{ wordpress_db_port }}"
+    timeout: 10
+  when:
+    - wordpress_use_external_db | default(false)
+    - wordpress_validate_connectivity | default(true)
+
+- name: Test Redis connectivity (external Redis)
+  ansible.builtin.wait_for:
+    host: "{{ wordpress_redis_host }}"
+    port: "{{ wordpress_redis_port }}"
+    timeout: 10
+  when:
+    - wordpress_use_external_cache | default(false)
+    - wordpress_external_cache_type == 'redis'
+    - wordpress_validate_connectivity | default(true)
+
+# ============================================================================
+# Final Validation Summary
+# ============================================================================
+
+- name: Display validation summary
+  ansible.builtin.debug:
+    msg:
+      - "=== WordPress Enterprise Role Validation Complete ==="
+      - "✅ Operating System: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      - "✅ Architecture: {{ ansible_architecture }}"
+      - "✅ WordPress Version: {{ wordpress_version }}"
+      - "✅ PHP Version: {{ wordpress_php_version }}"
+      - "✅ Web Server: {{ wordpress_web_server }}"
+      - "✅ Database Engine: {{ wordpress_db_engine }}"
+      - "✅ SSL Enabled: {{ wordpress_enable_ssl | default(true) }}"
+      - "✅ Redis Enabled: {{ wordpress_enable_redis | default(false) }}"
+      - "✅ All validation checks passed successfully"
+  when: wordpress_debug | default(false)
