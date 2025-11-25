@@ -75,6 +75,142 @@
   changed_when: false
   check_mode: false
 
+- name: Create additional Nginx directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/nginx/conf.d
+    - /var/log/nginx
+    - /var/cache/nginx/fastcgi
+    - /var/cache/nginx/proxy
+    - /var/cache/nginx/scgi
+    - /var/cache/nginx/uwsgi
+  become: true
+
+- name: Configure Nginx security settings
+  ansible.builtin.template:
+    src: nginx-security.conf.j2
+    dest: /etc/nginx/conf.d/security.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  notify: Reload nginx
+
+- name: Configure Nginx performance settings
+  ansible.builtin.template:
+    src: nginx-performance.conf.j2
+    dest: /etc/nginx/conf.d/performance.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  notify: Reload nginx
+
+- name: Configure Nginx SSL settings
+  ansible.builtin.template:
+    src: nginx-ssl.conf.j2
+    dest: /etc/nginx/conf.d/ssl.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: wordpress_enable_ssl | default(true)
+  notify: Reload nginx
+
+- name: Configure Nginx caching settings
+  ansible.builtin.template:
+    src: nginx-cache.conf.j2
+    dest: /etc/nginx/conf.d/cache.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: wordpress_enable_nginx_cache | default(true)
+  notify: Reload nginx
+
+- name: Configure Nginx rate limiting
+  ansible.builtin.template:
+    src: nginx-ratelimit.conf.j2
+    dest: /etc/nginx/conf.d/ratelimit.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  when: wordpress_nginx_rate_limiting | default(true)
+  notify: Reload nginx
+
+- name: Configure Nginx gzip compression
+  ansible.builtin.template:
+    src: nginx-gzip.conf.j2
+    dest: /etc/nginx/conf.d/gzip.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  become: true
+  notify: Reload nginx
+
+- name: Set proper permissions for cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+    recurse: true
+  loop:
+    - /var/cache/nginx
+    - /var/log/nginx
+  become: true
+  when: wordpress_enable_nginx_cache | default(true)
+
+- name: Configure log rotation for Nginx
+  ansible.builtin.template:
+    src: nginx-logrotate.j2
+    dest: /etc/logrotate.d/nginx-wordpress
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_logrotate_enabled | default(true)
+
+- name: Create Nginx monitoring configuration
+  ansible.builtin.template:
+    src: nginx-status.conf.j2
+    dest: /etc/nginx/conf.d/status.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  when: wordpress_nginx_status_page | default(false)
+  notify: Reload nginx
+
+- name: Set Nginx worker processes based on CPU cores
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^worker_processes'
+    line: "worker_processes {{ ansible_processor_vcpus | default('auto') }};"
+  become: true
+  notify: Reload nginx
+
+- name: Optimize Nginx worker connections
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^(\s*)worker_connections'
+    line: "\tworker_connections {{ wordpress_nginx_worker_connections | default('1024') }};"
+  become: true
+  notify: Reload nginx
+
 - name: Enable and start Nginx service
   ansible.builtin.systemd:
     name: nginx
@@ -82,3 +218,18 @@
     state: started
     daemon_reload: true
   become: true
+
+- name: Verify Nginx is responding
+  ansible.builtin.uri:
+    url: "http://localhost/"
+    method: HEAD
+    status_code: [200, 301, 302, 403, 404]
+  register: nginx_response
+  retries: 3
+  delay: 5
+  ignore_errors: true
+
+- name: Display Nginx status
+  ansible.builtin.debug:
+    msg: "Nginx is {{ 'responding' if nginx_response is succeeded else 'not responding' }}"
+  when: wordpress_debug | default(false)

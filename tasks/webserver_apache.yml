@@ -99,7 +99,11 @@
 - name: Configure Apache for PHP-FPM
   ansible.builtin.template:
     src: apache-php-fpm.conf.j2
-    dest: "{{ wordpress_apache_conf_path }}/{{ 'conf-available/php-fpm.conf' if ansible_os_family == 'Debian' else 'conf.d/php-fpm.conf' }}"
+    dest: >-
+      {{ wordpress_apache_conf_path }}/{{
+      'conf-available/php-fpm.conf'
+      if ansible_os_family == 'Debian'
+      else 'conf.d/php-fpm.conf' }}
     owner: root
     group: root
     mode: '0644'
@@ -165,9 +169,19 @@
     mode: '0644'
   become: true
   loop:
-    - "{{ wordpress_apache_sites_available }}/{{ wordpress_server_name }}.conf"
-    - "{{ wordpress_apache_conf_path }}/{{ 'conf-available/security.conf' if ansible_os_family == 'Debian' else 'conf.d/security.conf' }}"
-    - "{{ wordpress_apache_conf_path }}/{{ 'conf-available/php-fpm.conf' if ansible_os_family == 'Debian' else 'conf.d/php-fpm.conf' }}"
+    - >-
+      {{ wordpress_apache_sites_available }}/{{
+      wordpress_server_name }}.conf
+    - >-
+      {{ wordpress_apache_conf_path }}/{{
+      'conf-available/security.conf'
+      if ansible_os_family == 'Debian'
+      else 'conf.d/security.conf' }}
+    - >-
+      {{ wordpress_apache_conf_path }}/{{
+      'conf-available/php-fpm.conf'
+      if ansible_os_family == 'Debian'
+      else 'conf.d/php-fpm.conf' }}
 
 - name: Configure SELinux for Apache (RedHat/CentOS)
   ansible.posix.seboolean:

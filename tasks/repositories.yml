@@ -1,1 +1,301 @@
+---
+# Repository Management Tasks
+# This file handles the management of package repositories, PPAs, and third-party sources
 
+- name: Update package cache before adding repositories
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Install required packages for repository management (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - software-properties-common
+      - curl
+      - wget
+    state: present
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Install required packages for repository management (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name:
+      - dnf-plugins-core
+      - epel-release
+      - ca-certificates
+      - curl
+      - wget
+      - gnupg2
+    state: present
+  when: ansible_os_family == "RedHat"
+  become: true
+
+# PHP Repository Management
+- name: Add Ondrej PHP PPA (Ubuntu/Debian)
+  ansible.builtin.apt_repository:
+    repo: "ppa:ondrej/php"
+    state: present
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_php_repository | default(true)
+    - ansible_distribution in ["Ubuntu", "Debian"]
+  become: true
+
+- name: Add Sury PHP repository key (Debian)
+  ansible.builtin.apt_key:
+    url: https://packages.sury.org/php/apt.gpg
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_php_repository | default(true)
+    - ansible_distribution == "Debian"
+  become: true
+
+- name: Add Sury PHP repository (Debian)
+  ansible.builtin.apt_repository:
+    repo: "deb https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
+    state: present
+    filename: sury-php
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_php_repository | default(true)
+    - ansible_distribution == "Debian"
+  become: true
+
+- name: Add Remi repository (RHEL/CentOS)
+  ansible.builtin.dnf:
+    name: "https://rpms.remirepo.net/enterprise/remi-release-{{ ansible_distribution_major_version }}.rpm"
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_add_php_repository | default(true)
+  become: true
+
+- name: Enable PHP repository module (RHEL/CentOS 8+)
+  ansible.builtin.command:
+    cmd: "dnf module enable php:remi-{{ wordpress_php_version | default('8.2') }} -y"
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version | int >= 8
+    - wordpress_add_php_repository | default(true)
+  become: true
+  register: php_module_enable
+  changed_when: "'Nothing to do' not in php_module_enable.stdout"
+
+# Nginx Repository Management
+- name: Add official Nginx repository key (Debian/Ubuntu)
+  ansible.builtin.apt_key:
+    url: https://nginx.org/keys/nginx_signing.key
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_nginx_repository | default(true)
+    - wordpress_web_server == "nginx"
+  become: true
+
+- name: Add official Nginx repository (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "deb http://nginx.org/packages/{{ ansible_distribution | lower }}/ {{ ansible_distribution_release }} nginx"
+    state: present
+    filename: nginx-official
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_nginx_repository | default(true)
+    - wordpress_web_server == "nginx"
+  become: true
+
+- name: Add official Nginx repository (RHEL/CentOS)
+  ansible.builtin.yum_repository:
+    name: nginx
+    description: nginx repo
+    baseurl: "http://nginx.org/packages/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/{{ ansible_distribution_major_version }}/$basearch/"
+    gpgkey: https://nginx.org/keys/nginx_signing.key
+    gpgcheck: true
+    enabled: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_add_nginx_repository | default(true)
+    - wordpress_web_server == "nginx"
+  become: true
+
+# MariaDB Repository Management
+- name: Add MariaDB repository key (Debian/Ubuntu)
+  ansible.builtin.apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: 0xF1656F24C74CD1D8
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_mariadb_repository | default(true)
+    - wordpress_db_engine == "mariadb"
+  become: true
+
+- name: Add MariaDB repository (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64,arm64,ppc64el] http://mirror.mariadb.org/repo/{{ wordpress_mariadb_version | default('10.11') }}/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+    state: present
+    filename: mariadb
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_mariadb_repository | default(true)
+    - wordpress_db_engine == "mariadb"
+  become: true
+
+- name: Add MariaDB repository (RHEL/CentOS)
+  ansible.builtin.yum_repository:
+    name: mariadb
+    description: MariaDB
+    baseurl: "http://mirror.mariadb.org/yum/{{ wordpress_mariadb_version | default('10.11') }}/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}{{ ansible_distribution_major_version }}-amd64"
+    gpgkey: https://mirror.mariadb.org/yum/RPM-GPG-KEY-MariaDB
+    gpgcheck: true
+    enabled: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_add_mariadb_repository | default(true)
+    - wordpress_db_engine == "mariadb"
+  become: true
+
+# Node.js Repository (for build tools)
+- name: Add NodeSource repository key (Debian/Ubuntu)
+  ansible.builtin.apt_key:
+    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_nodejs_repository | default(false)
+  become: true
+
+- name: Add NodeSource repository (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "deb https://deb.nodesource.com/node_{{ wordpress_nodejs_version | default('18') }}.x {{ ansible_distribution_release }} main"
+    state: present
+    filename: nodesource
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_nodejs_repository | default(false)
+  become: true
+
+- name: Add NodeSource repository (RHEL/CentOS)
+  ansible.builtin.yum_repository:
+    name: nodesource
+    description: Node.js Packages for Enterprise Linux
+    baseurl: "https://rpm.nodesource.com/pub_{{ wordpress_nodejs_version | default('18') }}.x/el/{{ ansible_distribution_major_version }}/$basearch"
+    gpgkey: https://rpm.nodesource.com/pub/el/NODESOURCE-GPG-SIGNING-KEY-EL
+    gpgcheck: true
+    enabled: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_add_nodejs_repository | default(false)
+  become: true
+
+# Docker Repository (for containerization)
+- name: Add Docker repository key (Debian/Ubuntu)
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_docker_repository | default(false)
+  become: true
+
+- name: Add Docker repository (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+    update_cache: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_add_docker_repository | default(false)
+  become: true
+
+- name: Add Docker repository (RHEL/CentOS)
+  ansible.builtin.yum_repository:
+    name: docker-ce-stable
+    description: Docker CE Stable - $basearch
+    baseurl: "https://download.docker.com/linux/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/$releasever/$basearch/stable"
+    gpgkey: https://download.docker.com/linux/centos/gpg
+    gpgcheck: true
+    enabled: true
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_add_docker_repository | default(false)
+  become: true
+
+# Custom repositories from configuration
+- name: Add custom APT repositories
+  ansible.builtin.apt_repository:
+    repo: "{{ item.repo }}"
+    state: "{{ item.state | default('present') }}"
+    filename: "{{ item.filename | default(omit) }}"
+    update_cache: "{{ item.update_cache | default(true) }}"
+  loop: "{{ wordpress_custom_apt_repositories | default([]) }}"
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Add custom YUM repositories
+  ansible.builtin.yum_repository:
+    name: "{{ item.name }}"
+    description: "{{ item.description }}"
+    baseurl: "{{ item.baseurl }}"
+    gpgkey: "{{ item.gpgkey | default(omit) }}"
+    gpgcheck: "{{ item.gpgcheck | default(true) }}"
+    enabled: "{{ item.enabled | default(true) }}"
+    state: "{{ item.state | default('present') }}"
+  loop: "{{ wordpress_custom_yum_repositories | default([]) }}"
+  when: ansible_os_family == "RedHat"
+  become: true
+
+# Repository cleanup and verification
+- name: Remove unused repository keys (Debian/Ubuntu)
+  ansible.builtin.apt_key:
+    id: "{{ item }}"
+    state: absent
+  loop: "{{ wordpress_remove_apt_keys | default([]) }}"
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Remove unused repositories (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "{{ item }}"
+    state: absent
+  loop: "{{ wordpress_remove_apt_repositories | default([]) }}"
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Update package cache after repository changes (Debian/Ubuntu)
+  ansible.builtin.apt:
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Update package cache after repository changes (RHEL/CentOS)
+  ansible.builtin.dnf:
+    update_cache: true
+  when: ansible_os_family == "RedHat"
+  become: true
+
+- name: Verify repository configuration
+  ansible.builtin.command:
+    cmd: "{{ 'apt-cache policy' if ansible_os_family == 'Debian' else 'dnf repolist' }}"
+  register: repo_verification
+  changed_when: false
+  when: wordpress_debug | default(false)
+
+- name: Display repository status
+  ansible.builtin.debug:
+    var: repo_verification.stdout_lines
+  when: 
+    - wordpress_debug | default(false)
+    - repo_verification is defined

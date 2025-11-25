@@ -300,8 +300,14 @@
     msg: |
       WordPress Backup Configuration Summary:
       - Backup Directory: {{ wordpress_backup_dir }}
-      - Database Backups: Daily at {{ wordpress_backup_schedule_hour }}:{{ wordpress_backup_schedule_minute }}
-      - File Backups: Daily at {{ (wordpress_backup_schedule_hour | int + 1) % 24 }}:{{ wordpress_backup_schedule_minute }}
+      - >-
+        Database Backups: Daily at
+        {{ wordpress_backup_schedule_hour }}:{{
+        wordpress_backup_schedule_minute }}
+      - >-
+        File Backups: Daily at
+        {{ (wordpress_backup_schedule_hour | int + 1) % 24 }}:{{
+        wordpress_backup_schedule_minute }}
       - Full Backups: Weekly on Sunday at 01:00
       - Retention Period: {{ wordpress_backup_retention_days }} days
       - Remote Sync: {{ wordpress_backup_remote_enabled | default(false) | bool }}

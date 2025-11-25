@@ -1,0 +1,573 @@
+---
+# WordPress Enterprise - AppArmor Configuration Tasks
+# Configures AppArmor profiles for WordPress security hardening on Ubuntu/Debian
+
+- name: Check if AppArmor is available
+  ansible.builtin.command: aa-status
+  register: apparmor_status
+  failed_when: false
+  changed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Set AppArmor facts
+  ansible.builtin.set_fact:
+    apparmor_enabled: "{{ apparmor_status.rc == 0 }}"
+    apparmor_profiles_loaded: "{{ apparmor_status.stdout | regex_findall('profiles are loaded') | length > 0 if apparmor_status.rc == 0 else false }}"
+  when: ansible_os_family == "Debian"
+
+- name: Display AppArmor status
+  ansible.builtin.debug:
+    msg: "AppArmor status: {{ 'Enabled' if apparmor_enabled else 'Disabled' }}"
+  when: ansible_os_family == "Debian"
+
+- name: Install AppArmor utilities
+  ansible.builtin.package:
+    name:
+      - apparmor
+      - apparmor-utils
+      - apparmor-profiles
+      - apparmor-profiles-extra
+    state: present
+  when: 
+    - ansible_os_family == "Debian"
+    - wordpress_apparmor_install | default(true)
+  become: true
+
+- name: Enable AppArmor service
+  ansible.builtin.systemd:
+    name: apparmor
+    enabled: true
+    state: started
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_apparmor_install | default(true)
+  become: true
+
+- name: Create AppArmor profile directory for WordPress
+  ansible.builtin.file:
+    path: /etc/apparmor.d/local/wordpress
+    state: directory
+    mode: '0755'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+  become: true
+
+- name: Create WordPress PHP-FPM AppArmor profile
+  ansible.builtin.copy:
+    content: |
+      # WordPress PHP-FPM AppArmor Profile
+      # Last Modified: {{ ansible_date_time.iso8601 }}
+      
+      #include <tunables/global>
+      
+      /usr/sbin/php-fpm* {
+        #include <abstractions/base>
+        #include <abstractions/nameservice>
+        #include <abstractions/user-tmp>
+        #include <abstractions/php>
+        #include <abstractions/web-data>
+      
+        # Capabilities
+        capability chown,
+        capability dac_override,
+        capability fowner,
+        capability fsetid,
+        capability setgid,
+        capability setuid,
+        capability sys_resource,
+      
+        # Network access
+        network inet stream,
+        network inet6 stream,
+        network unix stream,
+      
+        # Binary execution
+        /usr/sbin/php-fpm* rmix,
+        /usr/bin/php* rmix,
+      
+        # Configuration files
+        /etc/php/*/fpm/ r,
+        /etc/php/*/fpm/** r,
+        /etc/php/*/mods-available/ r,
+        /etc/php/*/mods-available/** r,
+        /etc/ssl/certs/ r,
+        /etc/ssl/certs/** r,
+      
+        # WordPress directories - read access
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
+      
+        # WordPress writable directories
+        {{ wordpress_path }}/wp-content/ rw,
+        {{ wordpress_path }}/wp-content/** rw,
+        {{ wordpress_path }}/wp-content/uploads/ rw,
+        {{ wordpress_path }}/wp-content/uploads/** rw,
+        {{ wordpress_path }}/wp-content/cache/ rw,
+        {{ wordpress_path }}/wp-content/cache/** rw,
+        {{ wordpress_path }}/wp-content/upgrade/ rw,
+        {{ wordpress_path }}/wp-content/upgrade/** rw,
+      
+        # System directories
+        /proc/*/stat r,
+        /proc/sys/kernel/ngroups_max r,
+        /sys/devices/system/cpu/ r,
+        /sys/devices/system/cpu/online r,
+      
+        # Temporary directories
+        /tmp/ rw,
+        /tmp/** rw,
+        /var/tmp/ rw,
+        /var/tmp/** rw,
+      
+        # Log files
+        /var/log/php*-fpm.log w,
+        /var/log/php*/fpm.log w,
+      
+        # Runtime directories
+        /run/php/ rw,
+        /run/php/*.sock rw,
+        /run/php/*.pid rw,
+        /var/lib/php/sessions/ rw,
+        /var/lib/php/sessions/** rw,
+      
+        # Local customizations
+        #include <local/wordpress-php-fpm>
+      }
+    dest: /etc/apparmor.d/wordpress-php-fpm
+    mode: '0644'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_php_profile | default(true)
+  become: true
+  notify:
+    - reload apparmor
+
+- name: Create WordPress Nginx AppArmor profile
+  ansible.builtin.copy:
+    content: |
+      # WordPress Nginx AppArmor Profile
+      # Last Modified: {{ ansible_date_time.iso8601 }}
+      
+      #include <tunables/global>
+      
+      /usr/sbin/nginx {
+        #include <abstractions/base>
+        #include <abstractions/nameservice>
+        #include <abstractions/openssl>
+        #include <abstractions/web-data>
+      
+        # Capabilities
+        capability dac_override,
+        capability net_bind_service,
+        capability setgid,
+        capability setuid,
+        capability sys_resource,
+      
+        # Network access
+        network inet stream,
+        network inet6 stream,
+        network unix stream,
+      
+        # Binary execution
+        /usr/sbin/nginx rmix,
+      
+        # Configuration files
+        /etc/nginx/ r,
+        /etc/nginx/** r,
+        /etc/ssl/ r,
+        /etc/ssl/** r,
+        /etc/letsencrypt/ r,
+        /etc/letsencrypt/** r,
+      
+        # WordPress directories - read access
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
+      
+        # Log files
+        /var/log/nginx/ rw,
+        /var/log/nginx/** rw,
+      
+        # Runtime directories
+        /run/nginx.pid rw,
+        /var/cache/nginx/ rw,
+        /var/cache/nginx/** rw,
+      
+        # System files
+        /proc/*/stat r,
+        /proc/sys/kernel/ngroups_max r,
+        /sys/devices/system/cpu/online r,
+      
+        # Communication with PHP-FPM
+        /run/php/*.sock rw,
+      
+        # Local customizations
+        #include <local/wordpress-nginx>
+      }
+    dest: /etc/apparmor.d/wordpress-nginx
+    mode: '0644'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_web_server == "nginx"
+    - wordpress_apparmor_nginx_profile | default(true)
+  become: true
+  notify:
+    - reload apparmor
+
+- name: Create WordPress Apache AppArmor profile
+  ansible.builtin.copy:
+    content: |
+      # WordPress Apache AppArmor Profile
+      # Last Modified: {{ ansible_date_time.iso8601 }}
+      
+      #include <tunables/global>
+      
+      /usr/sbin/apache2 {
+        #include <abstractions/base>
+        #include <abstractions/nameservice>
+        #include <abstractions/openssl>
+        #include <abstractions/web-data>
+        #include <abstractions/php>
+      
+        # Capabilities
+        capability dac_override,
+        capability net_bind_service,
+        capability setgid,
+        capability setuid,
+        capability sys_resource,
+      
+        # Network access
+        network inet stream,
+        network inet6 stream,
+      
+        # Binary execution
+        /usr/sbin/apache2 rmix,
+        /usr/lib/apache2/modules/ r,
+        /usr/lib/apache2/modules/*.so mr,
+      
+        # Configuration files
+        /etc/apache2/ r,
+        /etc/apache2/** r,
+        /etc/ssl/ r,
+        /etc/ssl/** r,
+        /etc/letsencrypt/ r,
+        /etc/letsencrypt/** r,
+      
+        # WordPress directories - read access
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
+      
+        # WordPress writable directories
+        {{ wordpress_path }}/wp-content/ rw,
+        {{ wordpress_path }}/wp-content/** rw,
+        {{ wordpress_path }}/wp-content/uploads/ rw,
+        {{ wordpress_path }}/wp-content/uploads/** rw,
+        {{ wordpress_path }}/wp-content/cache/ rw,
+        {{ wordpress_path }}/wp-content/cache/** rw,
+      
+        # Log files
+        /var/log/apache2/ rw,
+        /var/log/apache2/** rw,
+      
+        # Runtime directories
+        /run/apache2/ rw,
+        /run/apache2/** rw,
+        /var/cache/apache2/ rw,
+        /var/cache/apache2/** rw,
+      
+        # System files
+        /proc/*/stat r,
+        /proc/sys/kernel/ngroups_max r,
+        /sys/devices/system/cpu/online r,
+      
+        # Local customizations
+        #include <local/wordpress-apache>
+      }
+    dest: /etc/apparmor.d/wordpress-apache
+    mode: '0644'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_web_server == "apache"
+    - wordpress_apparmor_apache_profile | default(true)
+  become: true
+  notify:
+    - reload apparmor
+
+- name: Create WordPress WP-CLI AppArmor profile
+  ansible.builtin.copy:
+    content: |
+      # WordPress WP-CLI AppArmor Profile
+      # Last Modified: {{ ansible_date_time.iso8601 }}
+      
+      #include <tunables/global>
+      
+      /usr/local/bin/wp {
+        #include <abstractions/base>
+        #include <abstractions/bash>
+        #include <abstractions/nameservice>
+        #include <abstractions/php>
+        #include <abstractions/user-download>
+      
+        # Capabilities
+        capability dac_override,
+        capability fowner,
+        capability chown,
+      
+        # Network access for downloads
+        network inet stream,
+        network inet6 stream,
+      
+        # Binary execution
+        /usr/local/bin/wp r,
+        /usr/bin/php* rix,
+        /bin/bash rix,
+        /bin/dash rix,
+        /usr/bin/curl rix,
+        /usr/bin/wget rix,
+        /usr/bin/unzip rix,
+        /usr/bin/tar rix,
+        /usr/bin/mysql rix,
+      
+        # WordPress directories - full access for WP-CLI
+        {{ wordpress_path }}/ rw,
+        {{ wordpress_path }}/** rw,
+      
+        # Temporary directories
+        /tmp/ rw,
+        /tmp/** rw,
+        /var/tmp/ rw,
+        /var/tmp/** rw,
+      
+        # User directories
+        /home/*/.wp-cli/ rw,
+        /home/*/.wp-cli/** rw,
+        /root/.wp-cli/ rw,
+        /root/.wp-cli/** rw,
+      
+        # System files
+        /proc/*/stat r,
+        /etc/passwd r,
+        /etc/group r,
+      
+        # Local customizations
+        #include <local/wordpress-wpcli>
+      }
+    dest: /etc/apparmor.d/wordpress-wpcli
+    mode: '0644'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_wpcli_profile | default(true)
+  become: true
+  notify:
+    - reload apparmor
+
+- name: Create local AppArmor customization files
+  ansible.builtin.file:
+    path: "/etc/apparmor.d/local/{{ item }}"
+    state: touch
+    mode: '0644'
+  loop:
+    - wordpress-php-fpm
+    - wordpress-nginx
+    - wordpress-apache
+    - wordpress-wpcli
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+  become: true
+
+- name: Configure AppArmor complain mode for testing
+  ansible.builtin.command: aa-complain {{ item }}
+  loop:
+    - /etc/apparmor.d/wordpress-php-fpm
+    - /etc/apparmor.d/wordpress-nginx
+    - /etc/apparmor.d/wordpress-apache
+    - /etc/apparmor.d/wordpress-wpcli
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_mode == "complain"
+  become: true
+  failed_when: false
+
+- name: Configure AppArmor enforce mode for production
+  ansible.builtin.command: aa-enforce {{ item }}
+  loop:
+    - /etc/apparmor.d/wordpress-php-fpm
+    - /etc/apparmor.d/wordpress-nginx
+    - /etc/apparmor.d/wordpress-apache
+    - /etc/apparmor.d/wordpress-wpcli
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_mode == "enforce"
+  become: true
+  failed_when: false
+
+- name: Install AppArmor log analyzer
+  ansible.builtin.package:
+    name: apparmor-notify
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_notify | default(true)
+  become: true
+
+- name: Create AppArmor monitoring script for WordPress
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # WordPress AppArmor monitoring script
+      
+      echo "=== WordPress AppArmor Status ==="
+      aa-status | grep -E "(wordpress|php|nginx|apache)" || echo "No WordPress AppArmor profiles found"
+      echo ""
+      
+      echo "=== AppArmor Profile Modes ==="
+      for profile in wordpress-php-fpm wordpress-nginx wordpress-apache wordpress-wpcli; do
+          if [ -f "/etc/apparmor.d/$profile" ]; then
+              mode=$(aa-status | grep "$profile" | awk '{print $2}' || echo "not loaded")
+              echo "$profile: $mode"
+          fi
+      done
+      echo ""
+      
+      echo "=== Recent AppArmor Denials ==="
+      dmesg | grep -i apparmor | grep -i denied | tail -10 || echo "No recent denials found"
+      echo ""
+      
+      echo "=== AppArmor Log Analysis ==="
+      if [ -f /var/log/audit/audit.log ]; then
+          ausearch -m AVC -ts recent 2>/dev/null | grep -i apparmor | tail -5 || echo "No recent audit entries"
+      elif [ -f /var/log/syslog ]; then
+          grep apparmor /var/log/syslog | tail -5 || echo "No AppArmor entries in syslog"
+      else
+          echo "No log files found"
+      fi
+    dest: /usr/local/bin/wordpress-apparmor-status
+    mode: '0755'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+  become: true
+
+- name: Create AppArmor troubleshooting script
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # WordPress AppArmor troubleshooting script
+      
+      echo "=== WordPress AppArmor Troubleshooting ==="
+      echo "Generated at: $(date)"
+      echo ""
+      
+      # Check AppArmor status
+      echo "AppArmor Status:"
+      aa-status
+      echo ""
+      
+      # Check for denials
+      echo "Recent AppArmor Denials (last 50 lines):"
+      dmesg | grep -i "apparmor.*denied" | tail -50
+      echo ""
+      
+      # Suggest fixes for common issues
+      echo "=== Common WordPress AppArmor Issues and Fixes ==="
+      echo ""
+      echo "1. PHP-FPM can't access WordPress files:"
+      echo "   - Check file permissions: ls -la {{ wordpress_path }}"
+      echo "   - Ensure WordPress files are owned by www-data"
+      echo "   - Add custom rules to /etc/apparmor.d/local/wordpress-php-fpm"
+      echo ""
+      echo "2. Web server can't serve static files:"
+      echo "   - Check Nginx/Apache profile allows read access to {{ wordpress_path }}"
+      echo "   - Verify SSL certificate paths in profile"
+      echo ""
+      echo "3. WP-CLI operations failing:"
+      echo "   - Run in complain mode: aa-complain /etc/apparmor.d/wordpress-wpcli"
+      echo "   - Check for denied operations in logs"
+      echo "   - Add necessary permissions to local profile"
+      echo ""
+      echo "4. Plugin/theme installation issues:"
+      echo "   - Ensure wp-content directories have write access"
+      echo "   - Check network access permissions for downloads"
+      echo "   - Verify unzip/tar permissions in profile"
+      echo ""
+      
+      # Generate aa-logprof suggestions if available
+      if command -v aa-logprof >/dev/null 2>&1; then
+          echo "=== AppArmor Profile Suggestions ==="
+          echo "Run 'aa-logprof' to automatically add rules for recent denials"
+          echo ""
+      fi
+    dest: /usr/local/bin/wordpress-apparmor-troubleshoot
+    mode: '0755'
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+  become: true
+
+- name: Set up AppArmor audit logging
+  ansible.builtin.lineinfile:
+    path: /etc/audit/rules.d/apparmor.rules
+    create: true
+    line: "{{ item }}"
+    mode: '0640'
+  loop:
+    - "# AppArmor audit rules for WordPress"
+    - "-a always,exit -F arch=b64 -S all -F key=apparmor"
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_audit | default(true)
+  become: true
+  notify:
+    - restart auditd
+
+- name: Validate AppArmor profiles
+  block:
+    - name: Check AppArmor profile syntax
+      ansible.builtin.command: apparmor_parser -T {{ item }}
+      loop:
+        - /etc/apparmor.d/wordpress-php-fpm
+        - /etc/apparmor.d/wordpress-nginx
+        - /etc/apparmor.d/wordpress-apache
+        - /etc/apparmor.d/wordpress-wpcli
+      register: apparmor_syntax_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display AppArmor validation results
+      ansible.builtin.debug:
+        msg: "Profile {{ item.item | basename }}: {{ 'Valid' if item.rc == 0 else 'Invalid - ' + item.stderr }}"
+      loop: "{{ apparmor_syntax_check.results }}"
+      when: item.item is defined
+
+    - name: Load AppArmor profiles
+      ansible.builtin.command: apparmor_parser -r {{ item }}
+      loop:
+        - /etc/apparmor.d/wordpress-php-fpm
+        - /etc/apparmor.d/wordpress-nginx
+        - /etc/apparmor.d/wordpress-apache
+        - /etc/apparmor.d/wordpress-wpcli
+      when: wordpress_apparmor_load_profiles | default(true)
+      become: true
+      failed_when: false
+
+    - name: Check loaded profiles status
+      ansible.builtin.command: aa-status
+      register: apparmor_loaded_status
+      changed_when: false
+
+    - name: Display loaded AppArmor profiles
+      ansible.builtin.debug:
+        msg: "{{ apparmor_loaded_status.stdout_lines | select('match', '.*wordpress.*') | list }}"
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_validate | default(true)

@@ -1,1 +1,63 @@
+---
+# Prerequisites tasks for WordPress installation
 
+- name: Update package cache (Debian/Ubuntu)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Update package cache (RedHat/CentOS)
+  ansible.builtin.dnf:
+    update_cache: true
+  when: ansible_os_family == "RedHat"
+
+- name: Install basic packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - unzip
+      - git
+      - software-properties-common
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install basic packages (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name:
+      - curl
+      - wget
+      - unzip
+      - git
+      - ca-certificates
+      - gnupg2
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Create WordPress system user
+  ansible.builtin.user:
+    name: "{{ wordpress_system_user | default('www-data') }}"
+    system: true
+    shell: /bin/false
+    home: /var/www
+    createhome: true
+    state: present
+
+- name: Create WordPress directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ wordpress_system_user | default('www-data') }}"
+    group: "{{ wordpress_system_group | default('www-data') }}"
+    mode: '0755'
+  loop:
+    - "{{ wordpress_install_dir }}"
+    - "{{ wordpress_install_dir }}/wp-content"
+    - "{{ wordpress_install_dir }}/wp-content/uploads"
+    - "{{ wordpress_install_dir }}/wp-content/themes"
+    - "{{ wordpress_install_dir }}/wp-content/plugins"
+    - /var/log/wordpress

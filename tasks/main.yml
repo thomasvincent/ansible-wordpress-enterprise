@@ -1,1 +1,77 @@
+---
+# Main tasks file for ansible-wordpress-enterprise
 
+- name: Include prerequisite tasks
+  ansible.builtin.include_tasks: prerequisites.yml
+  tags: [always, prerequisites]
+
+- name: Include database installation tasks
+  ansible.builtin.include_tasks: database.yml
+  when: not wordpress_use_external_db | default(false) | bool
+  tags: [database]
+
+- name: Include PHP installation tasks
+  ansible.builtin.include_tasks: php.yml
+  tags: [php]
+
+- name: Include web server installation tasks (Apache)
+  ansible.builtin.include_tasks: webserver_apache.yml
+  when: wordpress_web_server == "apache"
+  tags: [webserver, apache]
+
+- name: Include web server installation tasks (Nginx)
+  ansible.builtin.include_tasks: webserver_nginx.yml
+  when: wordpress_web_server == "nginx"
+  tags: [webserver, nginx]
+
+- name: Include WordPress installation tasks
+  ansible.builtin.include_tasks: wordpress_install.yml
+  tags: [wordpress]
+
+- name: Include WordPress configuration tasks
+  ansible.builtin.include_tasks: wordpress_configure.yml
+  tags: [wordpress, configure]
+
+- name: Include SSL configuration tasks
+  ansible.builtin.include_tasks: ssl.yml
+  when: wordpress_enable_ssl | default(false) | bool
+  tags: [ssl, security]
+
+- name: Include caching configuration tasks
+  ansible.builtin.include_tasks: caching.yml
+  when: wordpress_enable_caching | default(false) | bool
+  tags: [caching, performance]
+
+- name: Include security configuration tasks
+  ansible.builtin.include_tasks: security.yml
+  when: wordpress_enable_security | default(false) | bool
+  tags: [security]
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: wordpress_configure_firewall | default(false) | bool
+  tags: [firewall, security]
+
+- name: Include fail2ban configuration tasks
+  ansible.builtin.include_tasks: fail2ban.yml
+  when: wordpress_enable_fail2ban | default(false) | bool
+  tags: [fail2ban, security]
+
+- name: Include comprehensive security hardening tasks
+  ansible.builtin.include_tasks: security_hardening.yml
+  when: wordpress_security_hardening_enabled | default(true) | bool
+  tags: [security, hardening, selinux, apparmor]
+
+- name: Include monitoring configuration tasks
+  ansible.builtin.include_tasks: monitoring.yml
+  when: wordpress_enable_monitoring | default(false) | bool
+  tags: [monitoring]
+
+- name: Include backup configuration tasks
+  ansible.builtin.include_tasks: backups.yml
+  when: wordpress_enable_backups | default(false) | bool
+  tags: [backups]
+
+- name: Include verification tasks
+  ansible.builtin.include_tasks: verify.yml
+  tags: [verify]

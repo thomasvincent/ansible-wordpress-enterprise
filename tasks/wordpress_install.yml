@@ -155,7 +155,9 @@
 
 - name: Download and install WP-CLI
   ansible.builtin.get_url:
-    url: "https://raw.githubusercontent.com/wp-cli/wp-cli/v{{ wordpress_wpcli_version | default('2.9.0') }}/utils/wp-cli.phar"
+    url: >-
+      https://raw.githubusercontent.com/wp-cli/wp-cli/v{{
+      wordpress_wpcli_version | default('2.9.0') }}/utils/wp-cli.phar
     dest: /usr/local/bin/wp
     mode: '0755'
     owner: root

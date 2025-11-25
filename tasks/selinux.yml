@@ -1,0 +1,338 @@
+---
+# WordPress Enterprise - SELinux Configuration Tasks
+# Configures SELinux policies and contexts for WordPress security hardening
+
+- name: Check if SELinux is available
+  ansible.builtin.command: getenforce
+  register: selinux_status
+  failed_when: false
+  changed_when: false
+  when: ansible_os_family == "RedHat"
+
+- name: Set SELinux facts
+  ansible.builtin.set_fact:
+    selinux_enabled: "{{ selinux_status.rc == 0 and selinux_status.stdout in ['Enforcing', 'Permissive'] }}"
+    selinux_mode: "{{ selinux_status.stdout | default('Disabled') }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Display SELinux status
+  ansible.builtin.debug:
+    msg: "SELinux status: {{ selinux_mode }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install SELinux management tools
+  ansible.builtin.package:
+    name:
+      - policycoreutils
+      - policycoreutils-python-utils
+      - setools-console
+      - setroubleshoot-server
+    state: present
+  when: 
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Install additional SELinux tools for CentOS/RHEL 8+
+  ansible.builtin.package:
+    name:
+      - python3-policycoreutils
+      - checkpolicy
+    state: present
+  when: 
+    - ansible_os_family == "RedHat"
+    - ansible_distribution_major_version | int >= 8
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Set SELinux to enforcing mode (if configured)
+  ansible.posix.selinux:
+    policy: targeted
+    state: "{{ wordpress_selinux_mode | default('enforcing') }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_enforce | default(true)
+  become: true
+  notify:
+    - reboot system
+
+- name: Set SELinux file contexts for WordPress directories
+  community.general.sefcontext:
+    target: "{{ item.path }}"
+    setype: "{{ item.setype }}"
+    state: present
+  loop:
+    - path: "{{ wordpress_path }}(/.*)?"
+      setype: httpd_exec_t
+    - path: "{{ wordpress_path }}/wp-content(/.*)?"
+      setype: httpd_sys_rw_content_t
+    - path: "{{ wordpress_path }}/wp-content/uploads(/.*)?"
+      setype: httpd_sys_rw_content_t
+    - path: "{{ wordpress_path }}/wp-content/cache(/.*)?"
+      setype: httpd_sys_rw_content_t
+    - path: "{{ wordpress_path }}/wp-content/themes(/.*)?"
+      setype: httpd_sys_content_t
+    - path: "{{ wordpress_path }}/wp-content/plugins(/.*)?"
+      setype: httpd_sys_content_t
+    - path: "{{ wordpress_path }}/wp-config.php"
+      setype: httpd_config_t
+    - path: "{{ wordpress_path }}/wp-includes(/.*)?"
+      setype: httpd_sys_content_t
+    - path: "{{ wordpress_path }}/wp-admin(/.*)?"
+      setype: httpd_sys_content_t
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Set SELinux file contexts for log directories
+  community.general.sefcontext:
+    target: "{{ item.path }}"
+    setype: "{{ item.setype }}"
+    state: present
+  loop:
+    - path: "/var/log/nginx(/.*)?"
+      setype: httpd_log_t
+    - path: "/var/log/apache2(/.*)?"
+      setype: httpd_log_t
+    - path: "/var/log/httpd(/.*)?"
+      setype: httpd_log_t
+    - path: "/var/log/php-fpm(/.*)?"
+      setype: httpd_log_t
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Set SELinux file contexts for PHP-FPM
+  community.general.sefcontext:
+    target: "{{ item.path }}"
+    setype: "{{ item.setype }}"
+    state: present
+  loop:
+    - path: "/run/php-fpm(/.*)?"
+      setype: httpd_var_run_t
+    - path: "/var/lib/php/session(/.*)?"
+      setype: httpd_var_lib_t
+    - path: "/var/lib/php/wsdlcache(/.*)?"
+      setype: httpd_var_lib_t
+    - path: "/var/lib/php/opcache(/.*)?"
+      setype: httpd_var_lib_t
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_php_fpm_enabled | default(true)
+  become: true
+
+- name: Apply SELinux contexts to WordPress files
+  ansible.builtin.command: restorecon -R {{ wordpress_path }}
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+  changed_when: true
+
+- name: Apply SELinux contexts to web server directories
+  ansible.builtin.command: restorecon -R {{ item }}
+  loop:
+    - /var/log/nginx
+    - /var/log/apache2
+    - /var/log/httpd
+    - /run/php-fpm
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+  failed_when: false
+  changed_when: true
+
+- name: Configure SELinux booleans for WordPress
+  ansible.posix.sebool:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    persistent: true
+  loop:
+    - name: httpd_can_network_connect
+      state: "{{ wordpress_selinux_httpd_can_network_connect | default(true) }}"
+    - name: httpd_can_network_connect_db
+      state: "{{ wordpress_selinux_httpd_can_network_connect_db | default(true) }}"
+    - name: httpd_execmem
+      state: "{{ wordpress_selinux_httpd_execmem | default(false) }}"
+    - name: httpd_unified
+      state: "{{ wordpress_selinux_httpd_unified | default(false) }}"
+    - name: httpd_builtin_scripting
+      state: "{{ wordpress_selinux_httpd_builtin_scripting | default(true) }}"
+    - name: httpd_enable_cgi
+      state: "{{ wordpress_selinux_httpd_enable_cgi | default(true) }}"
+    - name: httpd_can_sendmail
+      state: "{{ wordpress_selinux_httpd_can_sendmail | default(true) }}"
+    - name: httpd_read_user_content
+      state: "{{ wordpress_selinux_httpd_read_user_content | default(true) }}"
+    - name: httpd_enable_homedirs
+      state: "{{ wordpress_selinux_httpd_enable_homedirs | default(false) }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Configure additional SELinux booleans for caching
+  ansible.posix.sebool:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    persistent: true
+  loop:
+    - name: httpd_can_network_memcache
+      state: "{{ wordpress_cache_type == 'memcached' }}"
+    - name: httpd_can_network_redis
+      state: "{{ wordpress_cache_type == 'redis' }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_cache_enabled | default(false)
+  become: true
+
+- name: Create custom SELinux policy for WordPress (if needed)
+  block:
+    - name: Create custom SELinux policy directory
+      ansible.builtin.file:
+        path: /etc/selinux/local
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Create WordPress SELinux policy file
+      ansible.builtin.copy:
+        content: |
+          # WordPress custom SELinux policy
+          module wordpress_custom 1.0;
+          
+          require {
+              type httpd_t;
+              type httpd_exec_t;
+              type httpd_sys_content_t;
+              type httpd_sys_rw_content_t;
+              type user_home_dir_t;
+              type user_home_t;
+              class file { read write create unlink open getattr setattr };
+              class dir { search read write add_name remove_name };
+          }
+          
+          # Allow httpd to manage WordPress files
+          allow httpd_t httpd_sys_rw_content_t:file { read write create unlink open getattr setattr };
+          allow httpd_t httpd_sys_rw_content_t:dir { search read write add_name remove_name };
+          
+          # Allow WordPress to create cache and upload files
+          allow httpd_t httpd_sys_rw_content_t:file create;
+          allow httpd_t httpd_sys_rw_content_t:dir add_name;
+        dest: /etc/selinux/local/wordpress_custom.te
+        mode: '0644'
+      become: true
+      register: selinux_policy_file
+
+    - name: Compile and install custom SELinux policy
+      ansible.builtin.shell: |
+        cd /etc/selinux/local
+        checkmodule -M -m -o wordpress_custom.mod wordpress_custom.te
+        semodule_package -o wordpress_custom.pp -m wordpress_custom.mod
+        semodule -i wordpress_custom.pp
+      when: selinux_policy_file.changed
+      become: true
+      changed_when: true
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_custom_policy | default(false)
+
+- name: Set up SELinux logging and monitoring
+  block:
+    - name: Install audit daemon
+      ansible.builtin.package:
+        name: audit
+        state: present
+      become: true
+
+    - name: Configure audit rules for WordPress
+      ansible.builtin.lineinfile:
+        path: /etc/audit/rules.d/wordpress.rules
+        create: true
+        line: "{{ item }}"
+        mode: '0640'
+      loop:
+        - "# WordPress audit rules"
+        - "-w {{ wordpress_path }} -p wa -k wordpress_files"
+        - "-w /var/log/audit/ -p wa -k audit_logs"
+        - "-a always,exit -F arch=b64 -S openat -F dir={{ wordpress_path }} -k wordpress_access"
+      become: true
+      notify:
+        - restart auditd
+
+    - name: Enable and start audit daemon
+      ansible.builtin.systemd:
+        name: auditd
+        enabled: true
+        state: started
+      become: true
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_audit | default(true)
+
+- name: Generate SELinux troubleshooting script
+  ansible.builtin.template:
+    src: selinux_troubleshoot.sh.j2
+    dest: /usr/local/bin/wordpress-selinux-troubleshoot
+    mode: '0755'
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Create SELinux status check script
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      echo "=== WordPress SELinux Status ==="
+      echo "SELinux Mode: $(getenforce)"
+      echo "SELinux Policy: $(sestatus | grep 'Policy from config file' | cut -d: -f2 | xargs)"
+      echo ""
+      echo "=== WordPress File Contexts ==="
+      ls -laZ {{ wordpress_path }} | head -10
+      echo ""
+      echo "=== SELinux Booleans ==="
+      getsebool -a | grep httpd | grep -E "(network|connect|script|mail)"
+      echo ""
+      echo "=== Recent SELinux Denials ==="
+      ausearch -m avc -ts recent 2>/dev/null | grep -i wordpress | tail -5 || echo "No recent denials found"
+    dest: /usr/local/bin/wordpress-selinux-status
+    mode: '0755'
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+  become: true
+
+- name: Validate SELinux configuration
+  block:
+    - name: Check SELinux contexts are applied correctly
+      ansible.builtin.command: ls -laZ {{ wordpress_path }}
+      register: selinux_contexts
+      changed_when: false
+
+    - name: Verify SELinux booleans are set correctly
+      ansible.builtin.command: getsebool {{ item }}
+      loop:
+        - httpd_can_network_connect
+        - httpd_can_network_connect_db
+        - httpd_builtin_scripting
+      register: selinux_booleans
+      changed_when: false
+
+    - name: Display SELinux validation results
+      ansible.builtin.debug:
+        msg: |
+          SELinux contexts: {{ selinux_contexts.stdout_lines[:5] }}
+          SELinux booleans: {{ selinux_booleans.results | map(attribute='stdout') | list }}
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_validate | default(true)

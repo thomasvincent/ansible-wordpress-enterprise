@@ -1,0 +1,408 @@
+---
+# WordPress Enterprise - Security Hardening Tasks
+# Main security hardening orchestration that handles both SELinux (RHEL/CentOS) and AppArmor (Ubuntu/Debian)
+
+- name: Display security hardening information
+  ansible.builtin.debug:
+    msg: |
+      Starting WordPress security hardening for {{ ansible_os_family }}
+      Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None detected' }}
+
+# Configure SELinux for RedHat-based systems
+- name: Configure SELinux security policies
+  ansible.builtin.include_tasks: selinux.yml
+  when:
+    - ansible_os_family == "RedHat"
+    - wordpress_security_hardening_enabled | default(true)
+    - wordpress_selinux_enabled | default(true)
+
+# Configure AppArmor for Debian-based systems  
+- name: Configure AppArmor security profiles
+  ansible.builtin.include_tasks: apparmor.yml
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_security_hardening_enabled | default(true)
+    - wordpress_apparmor_enabled | default(true)
+
+# Common security hardening tasks for all systems
+- name: Apply common security hardening
+  block:
+    - name: Set secure file permissions on WordPress directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        recurse: "{{ item.recurse | default(false) }}"
+        state: directory
+      loop:
+        - path: "{{ wordpress_path }}"
+          mode: '0755'
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
+          recurse: true
+        - path: "{{ wordpress_path }}/wp-content"
+          mode: '0755'
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
+          recurse: false
+        - path: "{{ wordpress_path }}/wp-content/uploads"
+          mode: '0755'
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
+          recurse: true
+        - path: "{{ wordpress_path }}/wp-content/cache"
+          mode: '0755'
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
+          recurse: true
+      become: true
+
+    - name: Set secure permissions on WordPress configuration
+      ansible.builtin.file:
+        path: "{{ wordpress_path }}/wp-config.php"
+        mode: '0644'
+        owner: "{{ wordpress_user }}"
+        group: "{{ wordpress_group }}"
+      become: true
+      when: wordpress_config_file_exists.stat.exists | default(false)
+
+    - name: Remove execution permissions from uploads directory
+      ansible.builtin.find:
+        paths: "{{ wordpress_path }}/wp-content/uploads"
+        file_type: file
+        recurse: true
+      register: upload_files
+      become: true
+
+    - name: Ensure uploads directory files are not executable
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: '0644'
+      loop: "{{ upload_files.files }}"
+      become: true
+      when: upload_files.files | length > 0
+
+    - name: Create .htaccess file for uploads directory (Apache)
+      ansible.builtin.copy:
+        content: |
+          # Disable script execution in uploads directory
+          <Files *.php>
+          deny from all
+          </Files>
+          <Files *.phtml>
+          deny from all
+          </Files>
+          <Files *.php3>
+          deny from all
+          </Files>
+          <Files *.php4>
+          deny from all
+          </Files>
+          <Files *.php5>
+          deny from all
+          </Files>
+          <Files *.phps>
+          deny from all
+          </Files>
+          <Files *.cgi>
+          deny from all
+          </Files>
+          <Files *.pl>
+          deny from all
+          </Files>
+          <Files *.sh>
+          deny from all
+          </Files>
+          <Files *.py>
+          deny from all
+          </Files>
+        dest: "{{ wordpress_path }}/wp-content/uploads/.htaccess"
+        mode: '0644'
+        owner: "{{ wordpress_user }}"
+        group: "{{ wordpress_group }}"
+      when: 
+        - wordpress_web_server == "apache"
+        - wordpress_secure_uploads | default(true)
+      become: true
+
+    - name: Install security monitoring tools
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - fail2ban
+        - logwatch
+        - rkhunter
+        - chkrootkit
+      become: true
+      when: wordpress_install_security_tools | default(true)
+
+    - name: Configure fail2ban for WordPress
+      ansible.builtin.copy:
+        content: |
+          # WordPress fail2ban configuration
+          [wordpress-auth]
+          enabled = true
+          port = http,https
+          filter = wordpress-auth
+          logpath = {{ wordpress_access_log_path | default('/var/log/nginx/access.log') }}
+          maxretry = 3
+          findtime = 120
+          bantime = 1200
+          
+          [wordpress-extra]
+          enabled = true
+          port = http,https
+          filter = wordpress-extra
+          logpath = {{ wordpress_access_log_path | default('/var/log/nginx/access.log') }}
+          maxretry = 1
+          findtime = 120
+          bantime = 1200
+        dest: /etc/fail2ban/jail.d/wordpress.conf
+        mode: '0644'
+      become: true
+      notify:
+        - restart fail2ban
+      when: 
+        - wordpress_fail2ban_enabled | default(true)
+        - wordpress_install_security_tools | default(true)
+
+    - name: Create fail2ban WordPress filters
+      ansible.builtin.copy:
+        content: |
+          # WordPress authentication filter
+          [Definition]
+          failregex = ^<HOST> .* "POST .*wp-login\.php.*" (?:200|302)
+                      ^<HOST> .* "POST .*wp-admin.*" 401
+                      ^<HOST> .* "GET .*wp-login\.php.*" 200.*wp_attempt_focus
+          ignoreregex =
+        dest: /etc/fail2ban/filter.d/wordpress-auth.conf
+        mode: '0644'
+      become: true
+      when: 
+        - wordpress_fail2ban_enabled | default(true)
+        - wordpress_install_security_tools | default(true)
+
+    - name: Configure automatic security updates
+      block:
+        - name: Install unattended-upgrades (Debian/Ubuntu)
+          ansible.builtin.package:
+            name: unattended-upgrades
+            state: present
+          when: ansible_os_family == "Debian"
+
+        - name: Configure unattended-upgrades (Debian/Ubuntu)
+          ansible.builtin.lineinfile:
+            path: /etc/apt/apt.conf.d/50unattended-upgrades
+            regexp: '^//\s*"{{ ansible_distribution }}-security";'
+            line: '        "{{ ansible_distribution }}-security";'
+            state: present
+          when: ansible_os_family == "Debian"
+
+        - name: Enable automatic security updates (RHEL/CentOS)
+          ansible.builtin.package:
+            name: yum-cron
+            state: present
+          when: ansible_os_family == "RedHat"
+
+        - name: Configure yum-cron for security updates (RHEL/CentOS)
+          ansible.builtin.lineinfile:
+            path: /etc/yum/yum-cron.conf
+            regexp: '^update_cmd = '
+            line: 'update_cmd = security'
+            state: present
+          when: ansible_os_family == "RedHat"
+          notify:
+            - restart yum-cron
+      become: true
+      when: wordpress_auto_security_updates | default(true)
+
+    - name: Configure system-wide security settings
+      block:
+        - name: Disable unused network services
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            enabled: false
+            state: stopped
+          loop:
+            - rpcbind
+            - nfs-server
+            - ypbind
+          failed_when: false
+          become: true
+          when: wordpress_disable_unused_services | default(true)
+
+        - name: Configure kernel security parameters
+          ansible.posix.sysctl:
+            name: "{{ item.name }}"
+            value: "{{ item.value }}"
+            state: present
+            sysctl_set: true
+            reload: true
+          loop:
+            - name: net.ipv4.ip_forward
+              value: '0'
+            - name: net.ipv4.conf.all.send_redirects
+              value: '0'
+            - name: net.ipv4.conf.default.send_redirects
+              value: '0'
+            - name: net.ipv4.conf.all.accept_source_route
+              value: '0'
+            - name: net.ipv4.conf.default.accept_source_route
+              value: '0'
+            - name: net.ipv4.conf.all.accept_redirects
+              value: '0'
+            - name: net.ipv4.conf.default.accept_redirects
+              value: '0'
+            - name: net.ipv4.conf.all.log_martians
+              value: '1'
+            - name: net.ipv4.icmp_echo_ignore_broadcasts
+              value: '1'
+            - name: net.ipv4.icmp_ignore_bogus_error_responses
+              value: '1'
+            - name: kernel.randomize_va_space
+              value: '2'
+          become: true
+          when: wordpress_kernel_hardening | default(true)
+
+        - name: Set password policy
+          ansible.builtin.lineinfile:
+            path: /etc/login.defs
+            regexp: '^{{ item.key }}'
+            line: '{{ item.key }} {{ item.value }}'
+            state: present
+          loop:
+            - key: PASS_MAX_DAYS
+              value: '90'
+            - key: PASS_MIN_DAYS
+              value: '1'
+            - key: PASS_MIN_LEN
+              value: '8'
+            - key: PASS_WARN_AGE
+              value: '7'
+          become: true
+          when: wordpress_password_policy | default(true)
+      become: true
+
+- name: Generate security status report
+  ansible.builtin.template:
+    src: security_status.sh.j2
+    dest: /usr/local/bin/wordpress-security-status
+    mode: '0755'
+  become: true
+  when: wordpress_security_status_script | default(true)
+
+- name: Create security maintenance script
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # WordPress Security Maintenance Script
+      # Run this script regularly to maintain security
+      
+      echo "=== WordPress Security Maintenance ==="
+      echo "Started at: $(date)"
+      echo ""
+      
+      # Update security databases
+      echo "Updating security databases..."
+      if command -v rkhunter >/dev/null 2>&1; then
+          rkhunter --update --quiet
+      fi
+      
+      if command -v freshclam >/dev/null 2>&1; then
+          freshclam --quiet
+      fi
+      
+      # Run security scans
+      echo "Running security scans..."
+      if command -v rkhunter >/dev/null 2>&1; then
+          rkhunter --check --skip-keypress --quiet
+      fi
+      
+      # Check for suspicious files
+      echo "Checking for suspicious files..."
+      find {{ wordpress_path }} -name "*.php" -exec grep -l "eval\|base64_decode\|gzinflate" {} \; 2>/dev/null
+      
+      # Check file permissions
+      echo "Checking file permissions..."
+      find {{ wordpress_path }} -type f -perm -002 -ls
+      
+      # Generate security report
+      echo "Generating security status report..."
+      /usr/local/bin/wordpress-security-status
+      
+      echo ""
+      echo "Security maintenance completed at: $(date)"
+    dest: /usr/local/bin/wordpress-security-maintenance
+    mode: '0755'
+  become: true
+
+- name: Set up security maintenance cron job
+  ansible.builtin.cron:
+    name: "WordPress security maintenance"
+    minute: "0"
+    hour: "2"
+    day: "*"
+    month: "*"
+    weekday: "0"
+    job: "/usr/local/bin/wordpress-security-maintenance > /var/log/wordpress-security-maintenance.log 2>&1"
+    user: root
+  become: true
+  when: wordpress_security_cron | default(true)
+
+- name: Display security hardening summary
+  ansible.builtin.debug:
+    msg: |
+      WordPress Security Hardening Complete!
+      
+      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'Basic hardening only' }}
+      Fail2ban: {{ 'Configured' if wordpress_fail2ban_enabled | default(true) else 'Disabled' }}
+      Auto updates: {{ 'Enabled' if wordpress_auto_security_updates | default(true) else 'Disabled' }}
+      Security tools: {{ 'Installed' if wordpress_install_security_tools | default(true) else 'Not installed' }}
+      
+      Security scripts available:
+      - /usr/local/bin/wordpress-security-status
+      - /usr/local/bin/wordpress-security-maintenance
+      {% if ansible_os_family == 'RedHat' %}
+      - /usr/local/bin/wordpress-selinux-status
+      - /usr/local/bin/wordpress-selinux-troubleshoot
+      {% elif ansible_os_family == 'Debian' %}
+      - /usr/local/bin/wordpress-apparmor-status  
+      - /usr/local/bin/wordpress-apparmor-troubleshoot
+      {% endif %}
+      
+      Run 'wordpress-security-status' to check current security status.
+
+- name: Validate security configuration
+  block:
+    - name: Test file permissions
+      ansible.builtin.stat:
+        path: "{{ wordpress_path }}/wp-config.php"
+      register: wp_config_perms
+      failed_when: false
+
+    - name: Test directory permissions
+      ansible.builtin.stat:
+        path: "{{ wordpress_path }}/wp-content/uploads"
+      register: wp_uploads_perms
+      failed_when: false
+
+    - name: Check security services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: security_services
+      loop:
+        - fail2ban
+        - "{{ 'auditd' if ansible_os_family == 'RedHat' else 'auditd' }}"
+      failed_when: false
+
+    - name: Display security validation results
+      ansible.builtin.debug:
+        msg: |
+          Security Validation Results:
+          wp-config.php permissions: {{ wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found' }}
+          uploads directory permissions: {{ wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found' }}
+          Security services status: {{ security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ') }}
+  when: wordpress_security_validate | default(true)

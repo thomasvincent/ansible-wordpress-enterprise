@@ -1,1 +1,153 @@
+---
+# WordPress Plugin Management Tasks
+# This file handles installation, activation, updates, and management of WordPress plugins
 
+- name: Ensure WP-CLI is installed for plugin management
+  ansible.builtin.include_tasks: wpcli.yml
+  when: wordpress_install_wpcli | default(true)
+
+- name: Validate plugin configuration
+  ansible.builtin.assert:
+    that:
+      - wordpress_plugins is defined
+      - wordpress_plugins is iterable
+    fail_msg: "wordpress_plugins must be defined as a list"
+    success_msg: "Plugin configuration validated"
+  when: wordpress_plugins | default([]) | length > 0
+
+- name: Install WordPress plugins from repository
+  ansible.builtin.command:
+    cmd: >-
+      wp plugin install {{ item.name }}
+      {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
+      {% if item.force | default(false) %}--force{% endif %}
+      --path={{ wordpress_install_dir }}
+    creates: "{{ wordpress_install_dir }}/wp-content/plugins/{{ item.name }}"
+  loop: "{{ wordpress_plugins | default([]) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.source is not defined
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: plugin_install_result
+  changed_when: "'Success: Installed' in plugin_install_result.stdout"
+
+- name: Install WordPress plugins from custom sources
+  block:
+    - name: Download custom plugin archives
+      ansible.builtin.get_url:
+        url: "{{ item.source }}"
+        dest: "/tmp/{{ item.name }}.zip"
+        mode: '0644'
+        timeout: 30
+      loop: "{{ wordpress_custom_plugins | default([]) }}"
+      when: 
+        - item.state | default('present') == 'present'
+        - item.source is defined
+        - item.source.endswith(('.zip', '.tar.gz'))
+
+    - name: Install custom plugins via WP-CLI
+      ansible.builtin.command:
+        cmd: >-
+          wp plugin install /tmp/{{ item.name }}.zip
+          {% if item.force | default(false) %}--force{% endif %}
+          --path={{ wordpress_install_dir }}
+      loop: "{{ wordpress_custom_plugins | default([]) }}"
+      when:
+        - item.state | default('present') == 'present'
+        - item.source is defined
+      become: true
+      become_user: "{{ wordpress_system_user }}"
+      register: custom_plugin_install_result
+      changed_when: "'Success: Installed' in custom_plugin_install_result.stdout"
+
+    - name: Clean up downloaded plugin archives
+      ansible.builtin.file:
+        path: "/tmp/{{ item.name }}.zip"
+        state: absent
+      loop: "{{ wordpress_custom_plugins | default([]) }}"
+  when: wordpress_custom_plugins | default([]) | length > 0
+
+- name: Activate WordPress plugins
+  ansible.builtin.command:
+    cmd: wp plugin activate {{ item.name }} --path={{ wordpress_install_dir }}
+  loop: "{{ (wordpress_plugins | default([])) + (wordpress_custom_plugins | default([])) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.activate | default(false)
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: plugin_activate_result
+  changed_when: "'Success: Activated' in plugin_activate_result.stdout"
+  failed_when: false  # Don't fail if plugin is already activated
+
+- name: Deactivate WordPress plugins
+  ansible.builtin.command:
+    cmd: wp plugin deactivate {{ item.name }} --path={{ wordpress_install_dir }}
+  loop: "{{ (wordpress_plugins | default([])) + (wordpress_custom_plugins | default([])) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - not (item.activate | default(false))
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: plugin_deactivate_result
+  changed_when: "'Success: Deactivated' in plugin_deactivate_result.stdout"
+  failed_when: false  # Don't fail if plugin is already deactivated
+
+- name: Update WordPress plugins
+  ansible.builtin.command:
+    cmd: wp plugin update {{ item.name }} --path={{ wordpress_install_dir }}
+  loop: "{{ (wordpress_plugins | default([])) + (wordpress_custom_plugins | default([])) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.auto_update | default(false)
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: plugin_update_result
+  changed_when: "'Success: Updated' in plugin_update_result.stdout"
+  failed_when: false  # Don't fail if plugin is already up to date
+
+- name: Uninstall WordPress plugins
+  ansible.builtin.command:
+    cmd: wp plugin uninstall {{ item.name }} --path={{ wordpress_install_dir }}
+  loop: "{{ (wordpress_plugins | default([])) + (wordpress_custom_plugins | default([])) }}"
+  when: item.state | default('present') == 'absent'
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: plugin_uninstall_result
+  changed_when: "'Success: Uninstalled' in plugin_uninstall_result.stdout"
+  failed_when: false  # Don't fail if plugin doesn't exist
+
+- name: Get list of installed plugins
+  ansible.builtin.command:
+    cmd: wp plugin list --format=json --path={{ wordpress_install_dir }}
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: installed_plugins
+  changed_when: false
+  when: wordpress_debug | default(false)
+
+- name: Debug - Display installed plugins
+  ansible.builtin.debug:
+    var: installed_plugins.stdout | from_json
+  when: 
+    - wordpress_debug | default(false)
+    - installed_plugins is defined
+
+- name: Configure plugin-specific settings
+  ansible.builtin.include_tasks: "configure_plugin_{{ item.name | regex_replace('-', '_') }}.yml"
+  loop: "{{ (wordpress_plugins | default([])) + (wordpress_custom_plugins | default([])) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.configure | default(false)
+  ignore_errors: true  # Allow missing configuration files
+
+- name: Set plugin file permissions
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-content/plugins"
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '{{ wordpress_dir_permissions }}'
+    recurse: true
+  become: true
+  when: wordpress_plugins | default([]) | length > 0 or wordpress_custom_plugins | default([]) | length > 0
