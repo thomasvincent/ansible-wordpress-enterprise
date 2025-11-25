@@ -59,8 +59,13 @@
 
 - name: Configure Apache main configuration
   ansible.builtin.template:
-    src: "{{ 'apache2.conf.j2' if ansible_os_family == 'Debian' else 'httpd.conf.j2' }}"
-    dest: "{{ wordpress_apache_conf_path }}/{{ 'apache2.conf' if ansible_os_family == 'Debian' else 'conf/httpd.conf' }}"
+    src: >-
+      {{ 'apache2.conf.j2' if ansible_os_family == 'Debian'
+      else 'httpd.conf.j2' }}
+    dest: >-
+      {{ wordpress_apache_conf_path }}/{{
+      'apache2.conf' if ansible_os_family == 'Debian'
+      else 'conf/httpd.conf' }}
     owner: root
     group: root
     mode: '0644'
@@ -71,7 +76,10 @@
 - name: Configure Apache security settings
   ansible.builtin.template:
     src: apache-security.conf.j2
-    dest: "{{ wordpress_apache_conf_path }}/{{ 'conf-available/security.conf' if ansible_os_family == 'Debian' else 'conf.d/security.conf' }}"
+    dest: >-
+      {{ wordpress_apache_conf_path }}/{{
+      'conf-available/security.conf' if ansible_os_family == 'Debian'
+      else 'conf.d/security.conf' }}
     owner: root
     group: root
     mode: '0644'

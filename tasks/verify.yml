@@ -334,7 +334,10 @@
 
 - name: Verify wp-config.php permissions
   ansible.builtin.debug:
-    msg: "wp-config.php permissions: {{ 'SECURE (600)' if wp_config_perms.stat.mode == '0600' else 'INSECURE (' + wp_config_perms.stat.mode + ')' }}"
+    msg: >-
+      wp-config.php permissions: {{
+      'SECURE (600)' if wp_config_perms.stat.mode == '0600'
+      else 'INSECURE (' + wp_config_perms.stat.mode + ')' }}
   when: wp_config_perms.stat.exists
 
 - name: Test WordPress URL response
@@ -364,16 +367,46 @@
   ansible.builtin.set_fact:
     verification_summary:
       wordpress_installed: "{{ wordpress_config_exists.stat.exists }}"
-      core_files_valid: "{{ wp_core_verify.rc == 0 if wp_core_verify is defined else 'N/A' }}"
-      database_connected: "{{ wp_db_check.rc == 0 if wp_db_check is defined else 'N/A' }}"
-      web_server_running: "{{ ansible_facts.services[wordpress_web_server_service[wordpress_web_server] + '.service'].state == 'running' if (wordpress_web_server_service[wordpress_web_server] + '.service') in ansible_facts.services else false }}"
-      php_fpm_running: "{{ ansible_facts.services[wordpress_php_fpm_service + '.service'].state == 'running' if (wordpress_php_fpm_service + '.service') in ansible_facts.services else false }}"
+      core_files_valid: >-
+        {{ wp_core_verify.rc == 0
+        if wp_core_verify is defined else 'N/A' }}
+      database_connected: >-
+        {{ wp_db_check.rc == 0
+        if wp_db_check is defined else 'N/A' }}
+      web_server_running: >-
+        {{ ansible_facts.services[
+        wordpress_web_server_service[wordpress_web_server] + '.service'
+        ].state == 'running'
+        if (wordpress_web_server_service[wordpress_web_server] + '.service')
+        in ansible_facts.services else false }}
+      php_fpm_running: >-
+        {{ ansible_facts.services[
+        wordpress_php_fpm_service + '.service'
+        ].state == 'running'
+        if (wordpress_php_fpm_service + '.service')
+        in ansible_facts.services else false }}
       ssl_enabled: "{{ wordpress_enable_ssl }}"
-      ssl_working: "{{ https_response.status is defined and https_response.status in [200, 301, 302] if wordpress_enable_ssl else 'N/A' }}"
-      firewall_active: "{{ wordpress_configure_firewall and ((ufw_status_check is defined and 'Status: active' in ufw_status_check.stdout) or (firewalld_status_check is defined and firewalld_status_check.stdout == 'running')) }}"
-      fail2ban_running: "{{ wordpress_enable_fail2ban and fail2ban_status_check is defined and fail2ban_status_check.rc == 0 }}"
-      redis_connected: "{{ wordpress_enable_redis and redis_ping_test is defined and redis_ping_test.stdout == 'PONG' }}"
-      site_accessible: "{{ wp_url_response.status is defined and wp_url_response.status in [200, 301, 302] }}"
+      ssl_working: >-
+        {{ https_response.status is defined
+        and https_response.status in [200, 301, 302]
+        if wordpress_enable_ssl else 'N/A' }}
+      firewall_active: >-
+        {{ wordpress_configure_firewall and
+        ((ufw_status_check is defined and
+        'Status: active' in ufw_status_check.stdout) or
+        (firewalld_status_check is defined and
+        firewalld_status_check.stdout == 'running')) }}
+      fail2ban_running: >-
+        {{ wordpress_enable_fail2ban and
+        fail2ban_status_check is defined and
+        fail2ban_status_check.rc == 0 }}
+      redis_connected: >-
+        {{ wordpress_enable_redis and
+        redis_ping_test is defined and
+        redis_ping_test.stdout == 'PONG' }}
+      site_accessible: >-
+        {{ wp_url_response.status is defined
+        and wp_url_response.status in [200, 301, 302] }}
 
 - name: Display verification summary
   ansible.builtin.debug:
