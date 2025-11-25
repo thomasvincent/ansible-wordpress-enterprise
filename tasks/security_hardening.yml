@@ -17,7 +17,7 @@
     - wordpress_security_hardening_enabled | default(true)
     - wordpress_selinux_enabled | default(true)
 
-# Configure AppArmor for Debian-based systems  
+# Configure AppArmor for Debian-based systems
 - name: Configure AppArmor security profiles
   ansible.builtin.include_tasks: apparmor.yml
   when:
@@ -122,7 +122,7 @@
         mode: '0644'
         owner: "{{ wordpress_user }}"
         group: "{{ wordpress_group }}"
-      when: 
+      when:
         - wordpress_web_server == "apache"
         - wordpress_secure_uploads | default(true)
       become: true
@@ -151,7 +151,7 @@
           maxretry = 3
           findtime = 120
           bantime = 1200
-          
+
           [wordpress-extra]
           enabled = true
           port = http,https
@@ -165,7 +165,7 @@
       become: true
       notify:
         - restart fail2ban
-      when: 
+      when:
         - wordpress_fail2ban_enabled | default(true)
         - wordpress_install_security_tools | default(true)
 
@@ -181,7 +181,7 @@
         dest: /etc/fail2ban/filter.d/wordpress-auth.conf
         mode: '0644'
       become: true
-      when: 
+      when:
         - wordpress_fail2ban_enabled | default(true)
         - wordpress_install_security_tools | default(true)
 
@@ -300,39 +300,39 @@
       #!/bin/bash
       # WordPress Security Maintenance Script
       # Run this script regularly to maintain security
-      
+
       echo "=== WordPress Security Maintenance ==="
       echo "Started at: $(date)"
       echo ""
-      
+
       # Update security databases
       echo "Updating security databases..."
       if command -v rkhunter >/dev/null 2>&1; then
           rkhunter --update --quiet
       fi
-      
+
       if command -v freshclam >/dev/null 2>&1; then
           freshclam --quiet
       fi
-      
+
       # Run security scans
       echo "Running security scans..."
       if command -v rkhunter >/dev/null 2>&1; then
           rkhunter --check --skip-keypress --quiet
       fi
-      
+
       # Check for suspicious files
       echo "Checking for suspicious files..."
       find {{ wordpress_path }} -name "*.php" -exec grep -l "eval\|base64_decode\|gzinflate" {} \; 2>/dev/null
-      
+
       # Check file permissions
       echo "Checking file permissions..."
       find {{ wordpress_path }} -type f -perm -002 -ls
-      
+
       # Generate security report
       echo "Generating security status report..."
       /usr/local/bin/wordpress-security-status
-      
+
       echo ""
       echo "Security maintenance completed at: $(date)"
     dest: /usr/local/bin/wordpress-security-maintenance
@@ -356,12 +356,12 @@
   ansible.builtin.debug:
     msg: |
       WordPress Security Hardening Complete!
-      
+
       Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'Basic hardening only' }}
       Fail2ban: {{ 'Configured' if wordpress_fail2ban_enabled | default(true) else 'Disabled' }}
       Auto updates: {{ 'Enabled' if wordpress_auto_security_updates | default(true) else 'Disabled' }}
       Security tools: {{ 'Installed' if wordpress_install_security_tools | default(true) else 'Not installed' }}
-      
+
       Security scripts available:
       - /usr/local/bin/wordpress-security-status
       - /usr/local/bin/wordpress-security-maintenance
@@ -369,10 +369,10 @@
       - /usr/local/bin/wordpress-selinux-status
       - /usr/local/bin/wordpress-selinux-troubleshoot
       {% elif ansible_os_family == 'Debian' %}
-      - /usr/local/bin/wordpress-apparmor-status  
+      - /usr/local/bin/wordpress-apparmor-status
       - /usr/local/bin/wordpress-apparmor-troubleshoot
       {% endif %}
-      
+
       Run 'wordpress-security-status' to check current security status.
 
 - name: Validate security configuration

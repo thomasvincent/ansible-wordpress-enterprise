@@ -1,0 +1,22 @@
+[mysqld]
+# WordPress specific configuration
+max_connections = {{ wordpress_mysql_max_connections | default('500') }}
+table_open_cache = {{ wordpress_mysql_table_open_cache | default('4000') }}
+thread_cache_size = {{ wordpress_mysql_thread_cache_size | default('50') }}
+
+# InnoDB Configuration
+innodb_buffer_pool_size = {{ wordpress_mysql_innodb_buffer_pool_size | default('256M') }}
+innodb_log_file_size = {{ wordpress_mysql_innodb_log_file_size | default('256M') }}
+innodb_flush_method = {{ wordpress_mysql_innodb_flush_method | default('O_DIRECT') }}
+innodb_file_per_table = {{ wordpress_mysql_innodb_file_per_table | default('1') }}
+
+# Query Cache
+query_cache_type = {{ wordpress_mysql_query_cache_type | default('1') }}
+query_cache_size = {{ wordpress_mysql_query_cache_size | default('128M') }}
+
+# Slow Query Log
+{% if wordpress_mysql_slow_query_log | default(false) %}
+slow_query_log = 1
+slow_query_log_file = {{ wordpress_mysql_slow_query_log_file | default('/var/log/mysql/slow-query.log') }}
+long_query_time = {{ wordpress_mysql_long_query_time | default('2') }}
+{% endif %}

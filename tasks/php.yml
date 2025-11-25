@@ -75,7 +75,7 @@
       - "php{{ wordpress_php_version }}-apcu"
       - "php{{ wordpress_php_version }}-xdebug"
     state: present
-  when: 
+  when:
     - ansible_os_family == "Debian"
     - wordpress_php_install_extensions | default(true)
   become: true
@@ -90,7 +90,7 @@
       - php-apcu
       - php-xdebug
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
     - wordpress_php_install_extensions | default(true)
   become: true
@@ -224,7 +224,7 @@
     - { key: 'session.save_path', value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"' }
   become: true
   notify: restart php-fpm
-  when: 
+  when:
     - wordpress_php_session_save_handler | default('files') == 'redis'
     - wordpress_enable_redis | default(false)
 
@@ -283,7 +283,7 @@
     path: "{{ wordpress_install_dir }}/phpinfo.php"
     state: absent
   become: true
-  when: 
+  when:
     - wordpress_php_create_phpinfo | default(false)
     - wordpress_php_remove_phpinfo | default(true)
   tags: cleanup

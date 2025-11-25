@@ -296,6 +296,6 @@
 - name: Display repository status
   ansible.builtin.debug:
     var: repo_verification.stdout_lines
-  when: 
+  when:
     - wordpress_debug | default(false)
     - repo_verification is defined

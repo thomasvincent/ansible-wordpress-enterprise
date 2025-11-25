@@ -13,7 +13,7 @@
     dest: /tmp/wp-cli.phar
     mode: '0755'
     timeout: 30
-  when: 
+  when:
     - not wpcli_binary.stat.exists or (wordpress_wpcli_force_update | default(false))
     - wordpress_wpcli_version | default('latest') != 'latest'
   become: true
@@ -24,7 +24,7 @@
     dest: /tmp/wp-cli.phar
     mode: '0755'
     timeout: 30
-  when: 
+  when:
     - not wpcli_binary.stat.exists or (wordpress_wpcli_force_update | default(false))
     - wordpress_wpcli_version | default('latest') == 'latest'
   become: true

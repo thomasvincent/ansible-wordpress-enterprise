@@ -1,0 +1,68 @@
+# Test runner container with Ansible and testing tools
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install Python, Ansible and testing tools
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    curl \
+    wget \
+    git \
+    openssh-client \
+    sshpass \
+    jq \
+    docker.io \
+    docker-compose \
+    xmlstarlet \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ansible and testing dependencies
+RUN pip3 install --no-cache-dir \
+    ansible>=8.0.0 \
+    ansible-lint \
+    yamllint \
+    molecule \
+    molecule-plugins[docker] \
+    pytest \
+    pytest-ansible \
+    pytest-html \
+    pytest-json-report \
+    requests \
+    beautifulsoup4 \
+    selenium \
+    testinfra
+
+# Install Ansible collections needed for testing
+RUN ansible-galaxy collection install \
+    community.general \
+    community.mysql \
+    community.crypto \
+    ansible.posix
+
+# Create working directory
+WORKDIR /ansible-workspace
+
+# Create test user
+RUN useradd -m -s /bin/bash tester \
+    && echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
+
+# Configure SSH client
+RUN mkdir -p /home/tester/.ssh \
+    && echo "Host *\n    StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null" > /home/tester/.ssh/config \
+    && chown -R tester:tester /home/tester/.ssh \
+    && chmod 600 /home/tester/.ssh/config
+
+# Create test report directory
+RUN mkdir -p /ansible-workspace/tests/reports \
+    && chown -R tester:tester /ansible-workspace
+
+USER tester
+
+# Set default command
+CMD ["bash"]

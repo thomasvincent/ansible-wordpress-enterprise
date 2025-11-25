@@ -115,3 +115,65 @@
     name: "{{ wordpress_apache_service }}"
     state: reloaded
   become: true
+
+- name: "Restart mysql"
+  ansible.builtin.systemd:
+    name: mysql
+    state: restarted
+  become: true
+
+- name: "Restart mariadb"
+  ansible.builtin.systemd:
+    name: mariadb
+    state: restarted
+  become: true
+
+- name: "Restart php8.1-fpm"
+  ansible.builtin.systemd:
+    name: php8.1-fpm
+    state: restarted
+    daemon_reload: true
+  become: true
+
+- name: "Restart php8.2-fpm"
+  ansible.builtin.systemd:
+    name: php8.2-fpm
+    state: restarted
+    daemon_reload: true
+  become: true
+
+- name: restart php-fpm
+  ansible.builtin.systemd:
+    name: "{{ wordpress_php_fpm_service }}"
+    state: restarted
+    daemon_reload: true
+  become: true
+
+# Security-related handlers
+- name: reload apparmor
+  ansible.builtin.systemd:
+    name: apparmor
+    state: reloaded
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: restart auditd
+  ansible.builtin.systemd:
+    name: auditd
+    state: restarted
+  become: true
+
+- name: restart yum-cron
+  ansible.builtin.systemd:
+    name: yum-cron
+    state: restarted
+    enabled: true
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: reboot system
+  ansible.builtin.reboot:
+    reboot_timeout: 600
+    test_command: whoami
+  become: true
+  when: wordpress_allow_reboot | default(false)

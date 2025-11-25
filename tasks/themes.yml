@@ -41,7 +41,7 @@
         mode: '0644'
         timeout: 30
       loop: "{{ wordpress_custom_themes | default([]) }}"
-      when: 
+      when:
         - item.state | default('present') == 'present'
         - item.source is defined
         - item.source.endswith(('.zip', '.tar.gz'))
@@ -106,7 +106,7 @@
   ansible.builtin.command:
     cmd: wp theme uninstall {{ item.name }} --path={{ wordpress_install_dir }}
   loop: "{{ (wordpress_themes | default([])) + (wordpress_custom_themes | default([])) }}"
-  when: 
+  when:
     - item.state | default('present') == 'absent'
     - not (item.name in (active_theme.stdout | from_json | map(attribute='name') | list))
   become: true
@@ -141,7 +141,7 @@
 - name: Debug - Display installed themes
   ansible.builtin.debug:
     var: installed_themes.stdout | from_json
-  when: 
+  when:
     - wordpress_debug | default(false)
     - installed_themes is defined
 

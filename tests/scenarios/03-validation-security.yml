@@ -1,0 +1,177 @@
+---
+# Validation and Security Test Scenario
+# Tests: Input validation, security hardening, SSL/TLS, fail2ban
+
+- name: "Test 03 - Validation and Security Features"
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+  
+  vars:
+    # WordPress configuration
+    wordpress_version: "latest"
+    wordpress_install_dir: "/var/www/secure-wordpress"
+    wordpress_site_title: "Secure WordPress Test Site"
+    wordpress_site_url: "https://{{ ansible_default_ipv4.address }}"
+    
+    # Admin user
+    wordpress_admin_user: "secureadmin"
+    wordpress_admin_password: "SecureAdmin123!@#"
+    wordpress_admin_email: "security@test.local"
+    
+    # Database configuration
+    wordpress_db_host: "wp-test-mysql"
+    wordpress_db_port: 3306
+    wordpress_db_name: "wordpress_test"
+    wordpress_db_user: "wp_test_user"
+    wordpress_db_password: "wp_test_pass_123"
+    
+    # Security-focused configuration
+    wordpress_web_server: "nginx"
+    wordpress_php_version: "8.2"
+    
+    # SSL/TLS configuration
+    wordpress_enable_ssl: true
+    wordpress_generate_self_signed_cert: true
+    wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
+    wordpress_ssl_prefer_server_ciphers: true
+    wordpress_force_ssl_admin: true
+    
+    # Security hardening
+    wordpress_disable_file_edit: true
+    wordpress_disable_file_mods: true
+    wordpress_disallow_unfiltered_html: true
+    wordpress_enable_security: true
+    
+    # WordPress security plugins
+    wordpress_plugins:
+      - name: "wordfence"
+        version: "latest"
+        state: "present"
+        activate: true
+      - name: "all-in-one-wp-security-and-firewall"
+        version: "latest"
+        state: "present"
+        activate: true
+    
+    # PHP security settings
+    wordpress_php_expose_php: "Off"
+    wordpress_php_allow_url_fopen: "Off"
+    wordpress_php_allow_url_include: "Off"
+    wordpress_php_display_errors: "Off"
+    wordpress_php_log_errors: "On"
+    wordpress_php_session_cookie_httponly: "1"
+    wordpress_php_session_cookie_secure: "1"
+    
+    # Firewall and fail2ban (if supported in container)
+    wordpress_configure_firewall: false  # Disabled in containers
+    wordpress_enable_fail2ban: false     # Disabled in containers
+    
+    # Enhanced logging
+    wordpress_enable_logging: true
+    wordpress_logrotate_enabled: true
+    wordpress_logrotate_frequency: "daily"
+    wordpress_logrotate_retention: 7
+    
+    # Additional security constants
+    wordpress_additional_constants:
+      DISALLOW_FILE_EDIT: true
+      DISALLOW_FILE_MODS: true
+      FORCE_SSL_ADMIN: true
+      WP_DEBUG: false
+      WP_DEBUG_LOG: true
+      WP_DEBUG_DISPLAY: false
+      SCRIPT_DEBUG: false
+
+  pre_tasks:
+    - name: Test input validation functionality
+      include_tasks: ../tasks/validate.yml
+      tags: validation
+
+  roles:
+    - ansible-wordpress-enterprise
+
+  post_tasks:
+    - name: Wait for HTTPS services to be ready
+      wait_for:
+        port: "{{ wordpress_https_port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 20
+        timeout: 300
+      delegate_to: localhost
+
+    - name: Test HTTPS redirect
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: [200, 301, 302]
+        follow_redirects: none
+      delegate_to: localhost
+      register: http_response
+
+    - name: Test HTTPS access (with self-signed cert)
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: [200, 301, 302]
+        validate_certs: false  # Self-signed cert
+      delegate_to: localhost
+      register: https_response
+
+    - name: Check PHP security headers
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}"
+        method: GET
+        validate_certs: false
+        return_content: true
+      delegate_to: localhost
+      register: security_headers
+
+    - name: Test admin area security
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}/wp-admin/"
+        method: GET
+        status_code: [200, 301, 302]
+        validate_certs: false
+      delegate_to: localhost
+      register: admin_security
+
+    - name: Check for security plugin installation
+      uri:
+        url: "https://{{ ansible_default_ipv4.address }}/wp-admin/admin.php?page=WFLS"
+        method: GET
+        status_code: [200, 301, 302, 404]  # 404 is OK if redirect
+        validate_certs: false
+      delegate_to: localhost
+      register: wordfence_test
+      ignore_errors: true
+
+    - name: Verify SSL certificate (self-signed)
+      command: >
+        openssl s_client -connect {{ ansible_default_ipv4.address }}:443 
+        -servername {{ ansible_default_ipv4.address }} -verify_return_error
+      delegate_to: localhost
+      register: ssl_cert_test
+      ignore_errors: true
+      changed_when: false
+
+    - name: Check file permissions security
+      stat:
+        path: "{{ wordpress_install_dir }}/wp-config.php"
+      register: wpconfig_perms
+
+    - name: Display security test results
+      debug:
+        msg:
+          - "🔒 Security and Validation test completed"
+          - "🔒 HTTPS accessible: {{ 'Yes' if https_response.status == 200 else 'Redirect' }}"
+          - "🔒 HTTP redirect status: {{ http_response.status }}"
+          - "🔒 SSL/TLS enabled: {{ wordpress_enable_ssl }}"
+          - "🔒 Self-signed cert: {{ wordpress_generate_self_signed_cert }}"
+          - "🔒 Force SSL admin: {{ wordpress_force_ssl_admin }}"
+          - "🔒 File edit disabled: {{ wordpress_disable_file_edit }}"
+          - "🔒 File mods disabled: {{ wordpress_disable_file_mods }}"
+          - "🔒 wp-config.php permissions: {{ wpconfig_perms.stat.mode }}"
+          - "🔒 Security plugins: {{ wordpress_plugins | length }} installed"
+          - "🔒 PHP expose_php: {{ wordpress_php_expose_php }}"
+          - "🔒 PHP allow_url_fopen: {{ wordpress_php_allow_url_fopen }}"

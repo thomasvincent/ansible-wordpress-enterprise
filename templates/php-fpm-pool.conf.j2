@@ -1,0 +1,42 @@
+[www]
+user = {{ wordpress_system_user | default('www-data') }}
+group = {{ wordpress_system_group | default('www-data') }}
+listen = {{ wordpress_php_fpm_listen | default('/run/php/php' + wordpress_php_version + '-fpm.sock') }}
+listen.owner = {{ wordpress_system_user | default('www-data') }}
+listen.group = {{ wordpress_system_group | default('www-data') }}
+listen.mode = 0660
+
+; Process management
+pm = {{ wordpress_php_fpm_pm | default('dynamic') }}
+pm.max_children = {{ wordpress_php_fpm_max_children | default('50') }}
+pm.start_servers = {{ wordpress_php_fpm_start_servers | default('5') }}
+pm.min_spare_servers = {{ wordpress_php_fpm_min_spare_servers | default('5') }}
+pm.max_spare_servers = {{ wordpress_php_fpm_max_spare_servers | default('35') }}
+pm.max_requests = {{ wordpress_php_fpm_max_requests | default('500') }}
+
+; Process naming
+pm.process_idle_timeout = 10s
+pm.max_requests = 500
+
+; Environment variables
+env[HOSTNAME] = $HOSTNAME
+env[PATH] = /usr/local/bin:/usr/bin:/bin
+env[TMP] = /tmp
+env[TMPDIR] = /tmp
+env[TEMP] = /tmp
+
+; PHP ini values
+php_admin_value[sendmail_path] = /usr/sbin/sendmail -t -i -f www@my.domain.com
+php_flag[display_errors] = {{ 'on' if wordpress_debug | default(false) else 'off' }}
+php_admin_value[error_log] = {{ wordpress_log_dir | default('/var/log/wordpress') }}/php-fpm.log
+php_admin_flag[log_errors] = on
+php_admin_value[memory_limit] = {{ wordpress_php_memory_limit | default('256M') }}
+
+; Security settings
+php_admin_value[open_basedir] = {{ wordpress_install_dir }}:/tmp:/var/tmp:/dev/urandom
+php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen
+
+; Session handling
+php_value[session.save_handler] = files
+php_value[session.save_path] = /var/lib/php/sessions
+php_value[soap.wsdl_cache_dir] = /var/lib/php/wsdlcache

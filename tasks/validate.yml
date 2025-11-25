@@ -332,7 +332,7 @@
       - wordpress_connectivity.status == 200
     fail_msg: "Cannot connect to WordPress.org. Check internet connectivity"
     success_msg: "WordPress.org connectivity verified"
-  when: 
+  when:
     - wordpress_validate_connectivity | default(true)
     - wordpress_connectivity is defined
 
