@@ -1,0 +1,40 @@
+[mysqld]
+# MySQL optimization for WordPress
+# Memory Configuration
+key_buffer_size = {{ wordpress_mysql_key_buffer_size | default('256M') }}
+max_allowed_packet = {{ wordpress_mysql_max_allowed_packet | default('256M') }}
+thread_stack = {{ wordpress_mysql_thread_stack | default('256K') }}
+thread_cache_size = {{ wordpress_mysql_thread_cache_size | default('50') }}
+myisam_recover_options = BACKUP
+
+# Connection Settings  
+max_connections = {{ wordpress_mysql_max_connections | default('500') }}
+max_connect_errors = {{ wordpress_mysql_max_connect_errors | default('100') }}
+
+# Table Cache
+table_open_cache = {{ wordpress_mysql_table_open_cache | default('4000') }}
+table_definition_cache = {{ wordpress_mysql_table_definition_cache | default('1400') }}
+
+# Temp Tables
+max_heap_table_size = {{ wordpress_mysql_max_heap_table_size | default('128M') }}
+tmp_table_size = {{ wordpress_mysql_tmp_table_size | default('128M') }}
+
+# InnoDB Specific
+innodb_buffer_pool_size = {{ wordpress_mysql_innodb_buffer_pool_size | default('512M') }}
+innodb_additional_mem_pool_size = {{ wordpress_mysql_innodb_additional_mem_pool_size | default('20M') }}
+innodb_log_file_size = {{ wordpress_mysql_innodb_log_file_size | default('256M') }}
+innodb_log_buffer_size = {{ wordpress_mysql_innodb_log_buffer_size | default('8M') }}
+innodb_flush_log_at_trx_commit = {{ wordpress_mysql_innodb_flush_log_at_trx_commit | default('1') }}
+innodb_lock_wait_timeout = {{ wordpress_mysql_innodb_lock_wait_timeout | default('120') }}
+
+# Binary Logging
+expire_logs_days = {{ wordpress_mysql_expire_logs_days | default('7') }}
+max_binlog_size = {{ wordpress_mysql_max_binlog_size | default('100M') }}
+
+# Query Cache
+query_cache_limit = {{ wordpress_mysql_query_cache_limit | default('2M') }}
+query_cache_size = {{ wordpress_mysql_query_cache_size | default('128M') }}
+query_cache_type = {{ wordpress_mysql_query_cache_type | default('1') }}
+
+# Performance Schema
+performance_schema = {{ wordpress_mysql_performance_schema | default('OFF') }}

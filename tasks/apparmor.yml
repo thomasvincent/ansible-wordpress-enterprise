@@ -28,7 +28,7 @@
       - apparmor-profiles
       - apparmor-profiles-extra
     state: present
-  when: 
+  when:
     - ansible_os_family == "Debian"
     - wordpress_apparmor_install | default(true)
   become: true
@@ -58,16 +58,16 @@
     content: |
       # WordPress PHP-FPM AppArmor Profile
       # Last Modified: {{ ansible_date_time.iso8601 }}
-      
+
       #include <tunables/global>
-      
+
       /usr/sbin/php-fpm* {
         #include <abstractions/base>
         #include <abstractions/nameservice>
         #include <abstractions/user-tmp>
         #include <abstractions/php>
         #include <abstractions/web-data>
-      
+
         # Capabilities
         capability chown,
         capability dac_override,
@@ -76,16 +76,16 @@
         capability setgid,
         capability setuid,
         capability sys_resource,
-      
+
         # Network access
         network inet stream,
         network inet6 stream,
         network unix stream,
-      
+
         # Binary execution
         /usr/sbin/php-fpm* rmix,
         /usr/bin/php* rmix,
-      
+
         # Configuration files
         /etc/php/*/fpm/ r,
         /etc/php/*/fpm/** r,
@@ -93,11 +93,11 @@
         /etc/php/*/mods-available/** r,
         /etc/ssl/certs/ r,
         /etc/ssl/certs/** r,
-      
+
         # WordPress directories - read access
         {{ wordpress_path }}/ r,
         {{ wordpress_path }}/** r,
-      
+
         # WordPress writable directories
         {{ wordpress_path }}/wp-content/ rw,
         {{ wordpress_path }}/wp-content/** rw,
@@ -107,30 +107,30 @@
         {{ wordpress_path }}/wp-content/cache/** rw,
         {{ wordpress_path }}/wp-content/upgrade/ rw,
         {{ wordpress_path }}/wp-content/upgrade/** rw,
-      
+
         # System directories
         /proc/*/stat r,
         /proc/sys/kernel/ngroups_max r,
         /sys/devices/system/cpu/ r,
         /sys/devices/system/cpu/online r,
-      
+
         # Temporary directories
         /tmp/ rw,
         /tmp/** rw,
         /var/tmp/ rw,
         /var/tmp/** rw,
-      
+
         # Log files
         /var/log/php*-fpm.log w,
         /var/log/php*/fpm.log w,
-      
+
         # Runtime directories
         /run/php/ rw,
         /run/php/*.sock rw,
         /run/php/*.pid rw,
         /var/lib/php/sessions/ rw,
         /var/lib/php/sessions/** rw,
-      
+
         # Local customizations
         #include <local/wordpress-php-fpm>
       }
@@ -149,30 +149,30 @@
     content: |
       # WordPress Nginx AppArmor Profile
       # Last Modified: {{ ansible_date_time.iso8601 }}
-      
+
       #include <tunables/global>
-      
+
       /usr/sbin/nginx {
         #include <abstractions/base>
         #include <abstractions/nameservice>
         #include <abstractions/openssl>
         #include <abstractions/web-data>
-      
+
         # Capabilities
         capability dac_override,
         capability net_bind_service,
         capability setgid,
         capability setuid,
         capability sys_resource,
-      
+
         # Network access
         network inet stream,
         network inet6 stream,
         network unix stream,
-      
+
         # Binary execution
         /usr/sbin/nginx rmix,
-      
+
         # Configuration files
         /etc/nginx/ r,
         /etc/nginx/** r,
@@ -180,28 +180,28 @@
         /etc/ssl/** r,
         /etc/letsencrypt/ r,
         /etc/letsencrypt/** r,
-      
+
         # WordPress directories - read access
         {{ wordpress_path }}/ r,
         {{ wordpress_path }}/** r,
-      
+
         # Log files
         /var/log/nginx/ rw,
         /var/log/nginx/** rw,
-      
+
         # Runtime directories
         /run/nginx.pid rw,
         /var/cache/nginx/ rw,
         /var/cache/nginx/** rw,
-      
+
         # System files
         /proc/*/stat r,
         /proc/sys/kernel/ngroups_max r,
         /sys/devices/system/cpu/online r,
-      
+
         # Communication with PHP-FPM
         /run/php/*.sock rw,
-      
+
         # Local customizations
         #include <local/wordpress-nginx>
       }
@@ -221,32 +221,32 @@
     content: |
       # WordPress Apache AppArmor Profile
       # Last Modified: {{ ansible_date_time.iso8601 }}
-      
+
       #include <tunables/global>
-      
+
       /usr/sbin/apache2 {
         #include <abstractions/base>
         #include <abstractions/nameservice>
         #include <abstractions/openssl>
         #include <abstractions/web-data>
         #include <abstractions/php>
-      
+
         # Capabilities
         capability dac_override,
         capability net_bind_service,
         capability setgid,
         capability setuid,
         capability sys_resource,
-      
+
         # Network access
         network inet stream,
         network inet6 stream,
-      
+
         # Binary execution
         /usr/sbin/apache2 rmix,
         /usr/lib/apache2/modules/ r,
         /usr/lib/apache2/modules/*.so mr,
-      
+
         # Configuration files
         /etc/apache2/ r,
         /etc/apache2/** r,
@@ -254,11 +254,11 @@
         /etc/ssl/** r,
         /etc/letsencrypt/ r,
         /etc/letsencrypt/** r,
-      
+
         # WordPress directories - read access
         {{ wordpress_path }}/ r,
         {{ wordpress_path }}/** r,
-      
+
         # WordPress writable directories
         {{ wordpress_path }}/wp-content/ rw,
         {{ wordpress_path }}/wp-content/** rw,
@@ -266,22 +266,22 @@
         {{ wordpress_path }}/wp-content/uploads/** rw,
         {{ wordpress_path }}/wp-content/cache/ rw,
         {{ wordpress_path }}/wp-content/cache/** rw,
-      
+
         # Log files
         /var/log/apache2/ rw,
         /var/log/apache2/** rw,
-      
+
         # Runtime directories
         /run/apache2/ rw,
         /run/apache2/** rw,
         /var/cache/apache2/ rw,
         /var/cache/apache2/** rw,
-      
+
         # System files
         /proc/*/stat r,
         /proc/sys/kernel/ngroups_max r,
         /sys/devices/system/cpu/online r,
-      
+
         # Local customizations
         #include <local/wordpress-apache>
       }
@@ -301,25 +301,25 @@
     content: |
       # WordPress WP-CLI AppArmor Profile
       # Last Modified: {{ ansible_date_time.iso8601 }}
-      
+
       #include <tunables/global>
-      
+
       /usr/local/bin/wp {
         #include <abstractions/base>
         #include <abstractions/bash>
         #include <abstractions/nameservice>
         #include <abstractions/php>
         #include <abstractions/user-download>
-      
+
         # Capabilities
         capability dac_override,
         capability fowner,
         capability chown,
-      
+
         # Network access for downloads
         network inet stream,
         network inet6 stream,
-      
+
         # Binary execution
         /usr/local/bin/wp r,
         /usr/bin/php* rix,
@@ -330,28 +330,28 @@
         /usr/bin/unzip rix,
         /usr/bin/tar rix,
         /usr/bin/mysql rix,
-      
+
         # WordPress directories - full access for WP-CLI
         {{ wordpress_path }}/ rw,
         {{ wordpress_path }}/** rw,
-      
+
         # Temporary directories
         /tmp/ rw,
         /tmp/** rw,
         /var/tmp/ rw,
         /var/tmp/** rw,
-      
+
         # User directories
         /home/*/.wp-cli/ rw,
         /home/*/.wp-cli/** rw,
         /root/.wp-cli/ rw,
         /root/.wp-cli/** rw,
-      
+
         # System files
         /proc/*/stat r,
         /etc/passwd r,
         /etc/group r,
-      
+
         # Local customizations
         #include <local/wordpress-wpcli>
       }
@@ -423,11 +423,11 @@
     content: |
       #!/bin/bash
       # WordPress AppArmor monitoring script
-      
+
       echo "=== WordPress AppArmor Status ==="
       aa-status | grep -E "(wordpress|php|nginx|apache)" || echo "No WordPress AppArmor profiles found"
       echo ""
-      
+
       echo "=== AppArmor Profile Modes ==="
       for profile in wordpress-php-fpm wordpress-nginx wordpress-apache wordpress-wpcli; do
           if [ -f "/etc/apparmor.d/$profile" ]; then
@@ -436,11 +436,11 @@
           fi
       done
       echo ""
-      
+
       echo "=== Recent AppArmor Denials ==="
       dmesg | grep -i apparmor | grep -i denied | tail -10 || echo "No recent denials found"
       echo ""
-      
+
       echo "=== AppArmor Log Analysis ==="
       if [ -f /var/log/audit/audit.log ]; then
           ausearch -m AVC -ts recent 2>/dev/null | grep -i apparmor | tail -5 || echo "No recent audit entries"
@@ -461,21 +461,21 @@
     content: |
       #!/bin/bash
       # WordPress AppArmor troubleshooting script
-      
+
       echo "=== WordPress AppArmor Troubleshooting ==="
       echo "Generated at: $(date)"
       echo ""
-      
+
       # Check AppArmor status
       echo "AppArmor Status:"
       aa-status
       echo ""
-      
+
       # Check for denials
       echo "Recent AppArmor Denials (last 50 lines):"
       dmesg | grep -i "apparmor.*denied" | tail -50
       echo ""
-      
+
       # Suggest fixes for common issues
       echo "=== Common WordPress AppArmor Issues and Fixes ==="
       echo ""
@@ -498,7 +498,7 @@
       echo "   - Check network access permissions for downloads"
       echo "   - Verify unzip/tar permissions in profile"
       echo ""
-      
+
       # Generate aa-logprof suggestions if available
       if command -v aa-logprof >/dev/null 2>&1; then
           echo "=== AppArmor Profile Suggestions ==="

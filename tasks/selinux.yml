@@ -28,7 +28,7 @@
       - setools-console
       - setroubleshoot-server
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
     - selinux_enabled | default(false)
   become: true
@@ -39,7 +39,7 @@
       - python3-policycoreutils
       - checkpolicy
     state: present
-  when: 
+  when:
     - ansible_os_family == "RedHat"
     - ansible_distribution_major_version | int >= 8
     - selinux_enabled | default(false)
@@ -206,7 +206,7 @@
         content: |
           # WordPress custom SELinux policy
           module wordpress_custom 1.0;
-          
+
           require {
               type httpd_t;
               type httpd_exec_t;
@@ -217,11 +217,11 @@
               class file { read write create unlink open getattr setattr };
               class dir { search read write add_name remove_name };
           }
-          
+
           # Allow httpd to manage WordPress files
           allow httpd_t httpd_sys_rw_content_t:file { read write create unlink open getattr setattr };
           allow httpd_t httpd_sys_rw_content_t:dir { search read write add_name remove_name };
-          
+
           # Allow WordPress to create cache and upload files
           allow httpd_t httpd_sys_rw_content_t:file create;
           allow httpd_t httpd_sys_rw_content_t:dir add_name;

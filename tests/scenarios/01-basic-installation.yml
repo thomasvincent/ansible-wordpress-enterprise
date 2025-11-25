@@ -1,0 +1,121 @@
+---
+# Basic WordPress Installation Test Scenario
+# Tests: Prerequisites, PHP, Nginx, WordPress core installation
+
+- name: "Test 01 - Basic WordPress Installation with Nginx"
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+  
+  vars:
+    # Basic WordPress configuration
+    wordpress_version: "latest"
+    wordpress_install_dir: "/var/www/wordpress"
+    wordpress_site_title: "Test WordPress Site"
+    wordpress_site_url: "http://{{ ansible_default_ipv4.address }}"
+    
+    # Admin user
+    wordpress_admin_user: "testadmin"
+    wordpress_admin_password: "TestAdmin123!"
+    wordpress_admin_email: "admin@test.local"
+    
+    # Database configuration (external MySQL)
+    wordpress_db_host: "wp-test-mysql"
+    wordpress_db_port: 3306
+    wordpress_db_name: "wordpress_test_nginx"
+    wordpress_db_user: "wp_test_nginx"
+    wordpress_db_password: "wp_test_nginx_pass"
+    wordpress_db_charset: "utf8mb4"
+    wordpress_db_collate: "utf8mb4_unicode_ci"
+    
+    # Web server configuration
+    wordpress_web_server: "nginx"
+    wordpress_http_port: 80
+    wordpress_https_port: 443
+    
+    # PHP configuration
+    wordpress_php_version: "8.1"
+    wordpress_php_memory_limit: "256M"
+    wordpress_php_max_execution_time: "300"
+    wordpress_php_upload_max_filesize: "64M"
+    wordpress_php_post_max_size: "64M"
+    
+    # System user
+    wordpress_system_user: "www-data"
+    wordpress_system_group: "www-data"
+    wordpress_file_permissions: "0644"
+    wordpress_dir_permissions: "0755"
+    
+    # Security (basic for testing)
+    wordpress_enable_ssl: false
+    wordpress_generate_self_signed_cert: false
+    wordpress_use_letsencrypt: false
+    
+    # Caching (Redis external)
+    wordpress_enable_redis: true
+    wordpress_redis_host: "wp-test-redis"
+    wordpress_redis_port: 6379
+    wordpress_redis_password: ""
+    wordpress_redis_database: 0
+    
+    # Features to enable for testing
+    wordpress_install_wpcli: true
+    wordpress_enable_logging: true
+    wordpress_debug: false
+    wordpress_enable_backups: false  # Disabled for testing
+    wordpress_enable_monitoring: false  # Disabled for testing
+    wordpress_configure_firewall: false  # Disabled for testing
+    wordpress_enable_fail2ban: false  # Disabled for testing
+    
+    # Testing-specific plugins
+    wordpress_plugins:
+      - name: "hello-dolly"
+        version: "latest"
+        state: "present"
+        activate: true
+      - name: "akismet"
+        version: "latest"
+        state: "present"
+        activate: false
+    
+    # Testing-specific themes
+    wordpress_themes:
+      - name: "twentytwentyfour"
+        version: "latest"
+        state: "present"
+        activate: true
+      - name: "twentytwentythree"
+        version: "latest"
+        state: "present"
+        activate: false
+
+  roles:
+    - ansible-wordpress-enterprise
+
+  post_tasks:
+    - name: Wait for services to be ready
+      wait_for:
+        port: "{{ wordpress_http_port }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 300
+      delegate_to: localhost
+
+    - name: Test WordPress installation
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}"
+        method: GET
+        status_code: [200, 301, 302]
+      delegate_to: localhost
+      register: wp_response
+
+    - name: Display test results
+      debug:
+        msg:
+          - "✅ WordPress installation test completed"
+          - "✅ Site accessible at: http://{{ ansible_default_ipv4.address }}"
+          - "✅ Response status: {{ wp_response.status }}"
+          - "✅ Web server: {{ wordpress_web_server }}"
+          - "✅ PHP version: {{ wordpress_php_version }}"
+          - "✅ Database: {{ wordpress_db_host }}:{{ wordpress_db_port }}"
+          - "✅ Cache: {{ wordpress_redis_host }}:{{ wordpress_redis_port }}"
