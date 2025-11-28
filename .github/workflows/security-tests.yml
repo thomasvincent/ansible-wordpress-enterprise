@@ -22,73 +22,73 @@ jobs:
       matrix:
         platform: [ubuntu, centos]
         python-version: ['3.9', '3.10', '3.11']
-    
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-      
+      uses: actions/checkout@v6
+
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-        
+
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-          
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y jq bc curl
-        
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install ansible>=2.14 ansible-lint yamllint molecule molecule-plugins[docker] pytest-testinfra
-        
+
     - name: Install Ansible Galaxy collections
       run: |
         ansible-galaxy collection install community.general
         ansible-galaxy collection install community.mysql
         ansible-galaxy collection install ansible.posix
-        
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+
     - name: Cache Docker layers
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-buildx-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-buildx-
-          
+
     - name: Run security hardening tests
       run: |
         make test-scenario-04
       timeout-minutes: 30
-      
+
     - name: Run security edge case tests
       run: |
         make test-scenario-05
       timeout-minutes: 20
-      
+
     - name: Run security unit tests
       run: |
         make test-security-unit
       timeout-minutes: 10
-      
+
     - name: Generate test coverage report
       run: |
         make test-coverage-report
       if: always()
-      
+
     - name: Upload test reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-test-reports-${{ matrix.platform }}-py${{ matrix.python-version }}
@@ -96,15 +96,15 @@ jobs:
           tests/reports/
           !tests/reports/**/*.log
         retention-days: 30
-        
+
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage-reports-${{ matrix.platform }}-py${{ matrix.python-version }}
         path: tests/reports/coverage/
         retention-days: 30
-        
+
     - name: Comment PR with coverage
       uses: actions/github-script@v6
       if: github.event_name == 'pull_request' && always()
@@ -112,44 +112,44 @@ jobs:
         script: |
           const fs = require('fs');
           const path = './tests/reports/coverage';
-          
+
           if (!fs.existsSync(path)) {
             console.log('Coverage reports not found');
             return;
           }
-          
+
           const files = fs.readdirSync(path).filter(f => f.endsWith('_summary.txt'));
           if (files.length === 0) {
             console.log('No coverage summary found');
             return;
           }
-          
+
           const summaryFile = files[0];
           const content = fs.readFileSync(`${path}/${summaryFile}`, 'utf8');
-          
+
           // Extract key metrics
           const featureCoverage = content.match(/Feature Coverage:\s+(\d+(?:\.\d+)?)%/)?.[1] || 'N/A';
           const scenarioCoverage = content.match(/Scenario Coverage:\s+(\d+(?:\.\d+)?)%/)?.[1] || 'N/A';
-          
+
           const comment = `## Security Test Coverage Report 🔒
-          
+
           **Platform:** ${{ matrix.platform }}
           **Python:** ${{ matrix.python-version }}
-          
+
           | Metric | Coverage |
           |--------|----------|
           | Features | ${featureCoverage}% |
           | Scenarios | ${scenarioCoverage}% |
-          
+
           <details>
           <summary>Full Coverage Report</summary>
-          
+
           \`\`\`
           ${content}
           \`\`\`
           </details>
           `;
-          
+
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
@@ -162,46 +162,46 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-hardening-tests
     if: always()
-    
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-      
+      uses: actions/checkout@v6
+
     - name: Download all coverage reports
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         pattern: coverage-reports-*
         path: ./coverage-reports
-        
+
     - name: Analyze security compliance
       run: |
         echo "🔍 Analyzing security compliance across all platforms..."
-        
+
         # Find all coverage JSON files
         find ./coverage-reports -name "*.json" | head -5 | while read json_file; do
           echo "📊 Processing: $json_file"
-          
+
           # Extract coverage percentages
           feature_pct=$(jq -r '.summary.feature_coverage.percentage' "$json_file" 2>/dev/null || echo "0")
           scenario_pct=$(jq -r '.summary.scenario_coverage.percentage' "$json_file" 2>/dev/null || echo "0")
-          
+
           echo "  Feature Coverage: $feature_pct%"
           echo "  Scenario Coverage: $scenario_pct%"
-          
+
           # Check compliance thresholds
           if (( $(echo "$feature_pct < 80" | bc -l) )); then
             echo "❌ Feature coverage below 80% threshold"
             exit 1
           fi
-          
+
           if (( $(echo "$scenario_pct < 90" | bc -l) )); then
             echo "❌ Scenario coverage below 90% threshold"
             exit 1
           fi
         done
-        
+
         echo "✅ All security compliance checks passed!"
-        
+
     - name: Security test summary
       if: always()
       run: |
@@ -222,60 +222,60 @@ jobs:
     name: Security Regression Test
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
-    
+
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-      
+      uses: actions/checkout@v6
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
-        
+
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y jq bc
         python -m pip install --upgrade pip
         pip install ansible>=2.14 ansible-lint
-        
+
     - name: Run comprehensive security test suite
       run: |
         echo "🔄 Running nightly security regression tests..."
         make test-security-all
-        
+
     - name: Generate comprehensive coverage report
       run: |
         make test-coverage-report
-        
+
     - name: Check for security regressions
       run: |
         # Compare with baseline coverage (if available)
         COVERAGE_FILE="./tests/reports/coverage/coverage_*.json"
-        
+
         if ls $COVERAGE_FILE 1> /dev/null 2>&1; then
           feature_pct=$(jq -r '.summary.feature_coverage.percentage' $COVERAGE_FILE)
           scenario_pct=$(jq -r '.summary.scenario_coverage.percentage' $COVERAGE_FILE)
-          
+
           echo "Current Feature Coverage: $feature_pct%"
           echo "Current Scenario Coverage: $scenario_pct%"
-          
+
           # Set regression thresholds
           if (( $(echo "$feature_pct < 85" | bc -l) )); then
             echo "🚨 SECURITY REGRESSION: Feature coverage dropped below 85%"
             exit 1
           fi
-          
+
           if (( $(echo "$scenario_pct < 95" | bc -l) )); then
             echo "🚨 SECURITY REGRESSION: Scenario coverage dropped below 95%"
             exit 1
           fi
-          
+
           echo "✅ No security regressions detected"
         else
           echo "⚠️ No coverage report found"
         fi
-        
+
     - name: Notify on regression
       if: failure()
       uses: actions/github-script@v6
@@ -286,24 +286,24 @@ jobs:
             repo: context.repo.repo,
             title: `🚨 Security Regression Detected - ${new Date().toISOString().split('T')[0]}`,
             body: `## Security Regression Alert
-            
+
             The nightly security regression test has detected a decrease in test coverage:
-            
+
             **Details:**
             - **Time:** ${new Date().toISOString()}
             - **Workflow:** ${context.workflow}
             - **Run ID:** ${context.runId}
-            
+
             **Action Required:**
             1. Review the security test failures
             2. Restore missing test coverage
             3. Ensure all security features are properly tested
-            
+
             **Links:**
             - [Failed Workflow Run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
             - [Security Testing Documentation](./tests/README.md)
             `,
             labels: ['security', 'bug', 'high-priority']
           });
-          
+
           console.log(`Created issue #${issue.data.number}`);
