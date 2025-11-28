@@ -106,7 +106,7 @@ jobs:
         retention-days: 30
 
     - name: Comment PR with coverage
-      uses: actions/github-script@v6
+      uses: actions/github-script@v8
       if: github.event_name == 'pull_request' && always()
       with:
         script: |
@@ -278,7 +278,7 @@ jobs:
 
     - name: Notify on regression
       if: failure()
-      uses: actions/github-script@v6
+      uses: actions/github-script@v8
       with:
         script: |
           const issue = await github.rest.issues.create({
