@@ -6,43 +6,43 @@
   hosts: wordpress_servers
   become: true
   gather_facts: true
-  
+
   vars:
     # WordPress configuration
     wordpress_version: "latest"
     wordpress_install_dir: "/var/www/secure-wordpress"
     wordpress_site_title: "Secure WordPress Test Site"
     wordpress_site_url: "https://{{ ansible_default_ipv4.address }}"
-    
+
     # Admin user
     wordpress_admin_user: "secureadmin"
     wordpress_admin_password: "SecureAdmin123!@#"
     wordpress_admin_email: "security@test.local"
-    
+
     # Database configuration
     wordpress_db_host: "wp-test-mysql"
     wordpress_db_port: 3306
     wordpress_db_name: "wordpress_test"
     wordpress_db_user: "wp_test_user"
     wordpress_db_password: "wp_test_pass_123"
-    
+
     # Security-focused configuration
     wordpress_web_server: "nginx"
     wordpress_php_version: "8.2"
-    
+
     # SSL/TLS configuration
     wordpress_enable_ssl: true
     wordpress_generate_self_signed_cert: true
     wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
     wordpress_ssl_prefer_server_ciphers: true
     wordpress_force_ssl_admin: true
-    
+
     # Security hardening
     wordpress_disable_file_edit: true
     wordpress_disable_file_mods: true
     wordpress_disallow_unfiltered_html: true
     wordpress_enable_security: true
-    
+
     # WordPress security plugins
     wordpress_plugins:
       - name: "wordfence"
@@ -53,7 +53,7 @@
         version: "latest"
         state: "present"
         activate: true
-    
+
     # PHP security settings
     wordpress_php_expose_php: "Off"
     wordpress_php_allow_url_fopen: "Off"
@@ -62,17 +62,17 @@
     wordpress_php_log_errors: "On"
     wordpress_php_session_cookie_httponly: "1"
     wordpress_php_session_cookie_secure: "1"
-    
+
     # Firewall and fail2ban (if supported in container)
     wordpress_configure_firewall: false  # Disabled in containers
     wordpress_enable_fail2ban: false     # Disabled in containers
-    
+
     # Enhanced logging
     wordpress_enable_logging: true
     wordpress_logrotate_enabled: true
     wordpress_logrotate_frequency: "daily"
     wordpress_logrotate_retention: 7
-    
+
     # Additional security constants
     wordpress_additional_constants:
       DISALLOW_FILE_EDIT: true
@@ -148,7 +148,7 @@
 
     - name: Verify SSL certificate (self-signed)
       command: >
-        openssl s_client -connect {{ ansible_default_ipv4.address }}:443 
+        openssl s_client -connect {{ ansible_default_ipv4.address }}:443
         -servername {{ ansible_default_ipv4.address }} -verify_return_error
       delegate_to: localhost
       register: ssl_cert_test

@@ -206,12 +206,6 @@ wordpress_opcache_validate_timestamps: "0"  # 0 for production, 1 for developmen
 wordpress_php_fpm_service: "php{{ wordpress_php_version }}-fpm"
 wordpress_php_ini_path: "/etc/php/{{ wordpress_php_version }}/fpm/php.ini"
 wordpress_php_fpm_pool_path: "/etc/php/{{ wordpress_php_version }}/fpm/pool.d/www.conf"
-wordpress_php_fpm_user: "{{ wordpress_system_user }}"
-wordpress_php_fpm_group: "{{ wordpress_system_group }}"
-wordpress_php_fpm_listen: "/run/php/php{{ wordpress_php_version }}-fpm.sock"
-
-# WordPress CLI
-wordpress_install_wpcli: true
 
 # ============================================================================
 # Backup Configuration

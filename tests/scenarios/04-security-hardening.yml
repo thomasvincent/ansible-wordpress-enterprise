@@ -6,7 +6,7 @@
   hosts: all
   become: true
   gather_facts: true
-  
+
   vars:
     # Test configuration
     test_run_id: "{{ test_run_id | default('security_test') }}"
@@ -17,13 +17,13 @@
     wordpress_admin_user: "securityadmin"
     wordpress_admin_password: "AdminSecurePass456!"
     wordpress_admin_email: "security-admin@test.local"
-    
+
     # Security hardening configuration
     wordpress_security_hardening_enabled: true
     wordpress_security_validate: true
     wordpress_security_status_script: true
     wordpress_security_cron: true
-    
+
     # SELinux configuration (RHEL/CentOS)
     wordpress_selinux_enabled: true
     wordpress_selinux_mode: enforcing
@@ -31,7 +31,7 @@
     wordpress_selinux_audit: true
     wordpress_selinux_validate: true
     wordpress_selinux_custom_policy: true
-    
+
     # AppArmor configuration (Ubuntu/Debian)
     wordpress_apparmor_enabled: true
     wordpress_apparmor_install: true
@@ -39,7 +39,7 @@
     wordpress_apparmor_audit: true
     wordpress_apparmor_validate: true
     wordpress_apparmor_load_profiles: true
-    
+
     # Security tools and monitoring
     wordpress_install_security_tools: true
     wordpress_fail2ban_enabled: true
@@ -47,12 +47,12 @@
     wordpress_disable_unused_services: true
     wordpress_kernel_hardening: true
     wordpress_password_policy: true
-    
+
     # Web server configuration
     wordpress_web_server: "{{ 'nginx' if ansible_os_family == 'Debian' else 'apache' }}"
     wordpress_enable_ssl: true
     wordpress_ssl_certificate_type: "self-signed"
-    
+
     # Caching configuration
     wordpress_enable_caching: true
     wordpress_cache_type: "{{ 'redis' if ansible_os_family == 'Debian' else 'memcached' }}"
@@ -499,7 +499,7 @@
             fail_msg: "AppArmor profile {{ item.item | basename }} has syntax errors"
             success_msg: "AppArmor profile {{ item.item | basename }} has valid syntax"
           loop: "{{ apparmor_syntax_test.results }}"
-          when: 
+          when:
             - ansible_os_family == "Debian"
             - apparmor_syntax_test is defined
 
@@ -547,7 +547,7 @@
               Security System: {{ expected_security_system }}
               Web Server: {{ wordpress_web_server }}
               Test Duration: {{ test_duration }} seconds
-              
+
               Security Features Tested:
               ✅ Security system installation and configuration
               ✅ File permissions and contexts/profiles
@@ -562,7 +562,7 @@
               ✅ Functional security testing
               ✅ Edge case handling
               ✅ Performance impact assessment
-              
+
               All security hardening tests completed successfully!
               WordPress installation is properly secured with {{ expected_security_system }}.
 

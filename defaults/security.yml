@@ -55,10 +55,10 @@ wordpress_kernel_hardening: true
 wordpress_password_policy: true
 
 # Logging paths (can be overridden per web server)
-wordpress_access_log_path: "{{ 
-  '/var/log/nginx/access.log' if wordpress_web_server == 'nginx' 
+wordpress_access_log_path: "{{
+  '/var/log/nginx/access.log' if wordpress_web_server == 'nginx'
   else '/var/log/apache2/access.log' if ansible_os_family == 'Debian'
-  else '/var/log/httpd/access_log' 
+  else '/var/log/httpd/access_log'
 }}"
 
 # Fail2ban configuration

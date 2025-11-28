@@ -6,19 +6,19 @@
   hosts: wordpress_servers
   become: true
   gather_facts: true
-  
+
   vars:
     # Basic WordPress configuration
     wordpress_version: "6.4.2"  # Specific version for testing
     wordpress_install_dir: "/var/www/apache-wordpress"
     wordpress_site_title: "Apache WordPress Test Site"
     wordpress_site_url: "http://{{ ansible_default_ipv4.address }}:8081"
-    
+
     # Admin user
     wordpress_admin_user: "apacheadmin"
     wordpress_admin_password: "ApacheAdmin123!"
     wordpress_admin_email: "apache@test.local"
-    
+
     # Database configuration (external MariaDB for CentOS test)
     wordpress_db_host: "wp-test-mariadb"
     wordpress_db_port: 3306
@@ -28,12 +28,12 @@
     wordpress_db_charset: "utf8mb4"
     wordpress_db_collate: "utf8mb4_unicode_ci"
     wordpress_db_engine: "mariadb"
-    
+
     # Web server configuration
     wordpress_web_server: "apache"
     wordpress_http_port: 80
     wordpress_https_port: 443
-    
+
     # PHP configuration
     wordpress_php_version: "8.2"
     wordpress_php_memory_limit: "512M"
@@ -41,33 +41,33 @@
     wordpress_php_upload_max_filesize: "128M"
     wordpress_php_post_max_size: "128M"
     wordpress_php_max_input_vars: "5000"
-    
+
     # Advanced PHP settings
     wordpress_opcache_enable: true
     wordpress_opcache_memory: "256"
     wordpress_opcache_max_files: "10000"
     wordpress_opcache_validate_timestamps: "0"
-    
+
     # System user
     wordpress_system_user: "www-data"
     wordpress_system_group: "www-data"
     wordpress_file_permissions: "0644"
     wordpress_dir_permissions: "0755"
-    
+
     # Security testing
     wordpress_enable_ssl: false
     wordpress_generate_self_signed_cert: false
-    
+
     # Caching - Memcached for variety
     wordpress_enable_memcached: true
     wordpress_memcached_servers:
       - "wp-test-memcached:11211"
-    
+
     # Features
     wordpress_install_wpcli: true
     wordpress_enable_logging: true
     wordpress_debug: true  # Enable debug for testing
-    
+
     # More comprehensive plugin testing
     wordpress_plugins:
       - name: "wordpress-seo"  # Yoast SEO
@@ -86,7 +86,7 @@
         version: "latest"
         state: "present"
         activate: false
-    
+
     # Theme testing
     wordpress_themes:
       - name: "astra"
