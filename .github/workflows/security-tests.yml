@@ -168,7 +168,7 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Download all coverage reports
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         pattern: coverage-reports-*
         path: ./coverage-reports
