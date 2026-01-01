@@ -8,6 +8,7 @@ on:
   schedule:
     # Run security tests daily at 2 AM UTC
     - cron: '0 2 * * *'
+  workflow_dispatch:
 
 env:
   ANSIBLE_FORCE_COLOR: 1
@@ -25,10 +26,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
