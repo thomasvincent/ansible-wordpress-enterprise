@@ -8,22 +8,15 @@ driver:
   name: docker
 
 platforms:
-  - name: ubuntu-22
+  - name: ubuntu-22.04
     image: ubuntu:22.04
     dockerfile: ../default/Dockerfile.j2
     pre_build_image: false
     command: sleep infinity
     privileged: false
   
-  - name: ubuntu-24
+  - name: ubuntu-24.04
     image: ubuntu:24.04
-    dockerfile: ../default/Dockerfile.j2
-    pre_build_image: false
-    command: sleep infinity
-    privileged: false
-  
-  - name: rocky-9
-    image: rockylinux:9
     dockerfile: ../default/Dockerfile.j2
     pre_build_image: false
     command: sleep infinity
@@ -38,11 +31,9 @@ provisioner:
       roles_path: ${MOLECULE_PROJECT_DIRECTORY}/../
   inventory:
     host_vars:
-      ubuntu-22:
+      ubuntu-22.04:
         ansible_python_interpreter: /usr/bin/python3
-      ubuntu-24:
-        ansible_python_interpreter: /usr/bin/python3
-      rocky-9:
+      ubuntu-24.04:
         ansible_python_interpreter: /usr/bin/python3
   playbooks:
     prepare: prepare.yml
@@ -56,7 +47,7 @@ verifier:
   name: ansible
 
 scenario:
-  name: default
+  name: ubuntu
   test_sequence:
     - dependency
     - cleanup

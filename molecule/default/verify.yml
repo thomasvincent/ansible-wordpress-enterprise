@@ -1,0 +1,88 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  
+  tasks:
+    - name: Check WordPress directory exists
+      ansible.builtin.stat:
+        path: /var/www/wordpress
+      register: wordpress_dir
+      failed_when: not wordpress_dir.stat.exists
+
+    - name: Check WordPress is installed
+      ansible.builtin.stat:
+        path: /var/www/wordpress/wp-config.php
+      register: wp_config
+      failed_when: not wp_config.stat.exists
+
+    - name: Check web server is running (Apache)
+      ansible.builtin.systemd:
+        name: apache2
+        state: started
+      check_mode: true
+      when: ansible_os_family == "Debian"
+      register: apache_status
+      failed_when: false
+
+    - name: Check web server is running (httpd)
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+      check_mode: true
+      when: ansible_os_family == "RedHat"
+      register: httpd_status
+      failed_when: false
+
+    - name: Verify web server is active
+      ansible.builtin.assert:
+        that:
+          - (ansible_os_family == "Debian" and apache_status is defined) or
+            (ansible_os_family == "RedHat" and httpd_status is defined)
+        fail_msg: "Web server is not configured properly"
+
+    - name: Check PHP is installed
+      ansible.builtin.command: php --version
+      register: php_version
+      changed_when: false
+      failed_when: php_version.rc != 0
+
+    - name: Check database service is running (MySQL/MariaDB)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      check_mode: true
+      loop:
+        - mysql
+        - mariadb
+      register: db_status
+      failed_when: false
+      when: not wordpress_use_external_db | default(false)
+
+    - name: Verify database is accessible
+      ansible.builtin.command: mysql -u{{ wordpress_db_user }} -p{{ wordpress_db_password }} -h{{ wordpress_db_host }} -e "SHOW DATABASES;"
+      register: db_check
+      changed_when: false
+      failed_when: db_check.rc != 0
+      no_log: true
+      when: not wordpress_use_external_db | default(false)
+
+    - name: Check WordPress database exists
+      ansible.builtin.command: mysql -u{{ wordpress_db_user }} -p{{ wordpress_db_password }} -h{{ wordpress_db_host }} -e "USE {{ wordpress_db_name }};"
+      register: db_exists
+      changed_when: false
+      failed_when: db_exists.rc != 0
+      no_log: true
+      when: not wordpress_use_external_db | default(false)
+
+    - name: Verify WordPress core files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/www/wordpress/wp-config.php
+        - /var/www/wordpress/wp-settings.php
+        - /var/www/wordpress/wp-load.php
+        - /var/www/wordpress/index.php
+      register: wp_files
+      failed_when: not wp_files.results | map(attribute='stat.exists') | list | min
