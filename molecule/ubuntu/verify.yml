@@ -56,7 +56,15 @@
         - /var/www/wordpress/wp-load.php
         - /var/www/wordpress/index.php
       register: wp_files
-      failed_when: not wp_files.results | map(attribute='stat.exists') | list | min
+
+    - name: Check all WordPress core files are present
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "WordPress core file {{ item.item }} is missing"
+      loop: "{{ wp_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
 
     - name: Verify Ubuntu-specific packages
       ansible.builtin.package_facts:
