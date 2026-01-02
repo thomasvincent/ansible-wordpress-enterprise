@@ -1,0 +1,79 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  
+  tasks:
+    - name: Check WordPress directory exists
+      ansible.builtin.stat:
+        path: /var/www/wordpress
+      register: wordpress_dir
+      failed_when: not wordpress_dir.stat.exists
+
+    - name: Check WordPress is installed
+      ansible.builtin.stat:
+        path: /var/www/wordpress/wp-config.php
+      register: wp_config
+      failed_when: not wp_config.stat.exists
+
+    - name: Check httpd is running
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+      check_mode: true
+      register: httpd_status
+      failed_when: false
+
+    - name: Check PHP is installed
+      ansible.builtin.command: php --version
+      register: php_version
+      changed_when: false
+      failed_when: php_version.rc != 0
+
+    - name: Display PHP version
+      ansible.builtin.debug:
+        msg: "PHP version: {{ php_version.stdout_lines[0] }}"
+
+    - name: Check database service is running
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      check_mode: true
+      loop:
+        - mysqld
+        - mariadb
+      register: db_status
+      failed_when: false
+      when: not wordpress_use_external_db | default(false)
+
+    - name: Verify WordPress core files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/www/wordpress/wp-config.php
+        - /var/www/wordpress/wp-settings.php
+        - /var/www/wordpress/wp-load.php
+        - /var/www/wordpress/index.php
+      register: wp_files
+
+    - name: Check all WordPress core files are present
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "WordPress core file {{ item.item }} is missing"
+      loop: "{{ wp_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify RHEL-specific packages
+      ansible.builtin.package_facts:
+        manager: rpm
+
+    - name: Check that required RHEL packages are installed
+      ansible.builtin.assert:
+        that:
+          - "'httpd' in ansible_facts.packages or 'nginx' in ansible_facts.packages"
+          - "'php' in ansible_facts.packages or ansible_facts.packages | dict2items | selectattr('key', 'match', '^php[0-9]') | list | length > 0"
+        fail_msg: "Required packages are not installed"
+        success_msg: "All required RHEL packages are present"

@@ -48,7 +48,7 @@ jobs:
   test-ubuntu-22:
     name: Test - Ubuntu 22.04
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent hung jobs
+    timeout-minutes: 20  # Prevent hung jobs
     needs: lint
     steps:
       - name: Checkout code
@@ -70,17 +70,16 @@ jobs:
           ansible-galaxy collection install community.mysql
           ansible-galaxy collection install ansible.posix
 
-      - name: Run Molecule test
-        run: molecule test
+      - name: Run Molecule test (default scenario)
+        run: molecule test --scenario-name default
         env:
-          MOLECULE_DISTRO: ubuntu2204
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
 
   test-ubuntu-24:
     name: Test - Ubuntu 24.04
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent hung jobs
+    timeout-minutes: 20  # Prevent hung jobs
     needs: lint
     steps:
       - name: Checkout code
@@ -102,17 +101,47 @@ jobs:
           ansible-galaxy collection install community.mysql
           ansible-galaxy collection install ansible.posix
 
-      - name: Run Molecule test
-        run: molecule test
+      - name: Run Molecule test (Ubuntu scenario)
+        run: molecule test --scenario-name ubuntu
         env:
-          MOLECULE_DISTRO: ubuntu2404
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  test-debian:
+    name: Test - Debian (11, 12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # Prevent hung jobs
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Molecule and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install ansible.posix
+
+      - name: Run Molecule test (Debian scenario)
+        run: molecule test --scenario-name debian
+        env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
 
   test-rocky-9:
     name: Test - Rocky Linux 9
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent hung jobs
+    timeout-minutes: 20  # Prevent hung jobs
     needs: lint
     steps:
       - name: Checkout code
@@ -134,10 +163,40 @@ jobs:
           ansible-galaxy collection install community.mysql
           ansible-galaxy collection install ansible.posix
 
-      - name: Run Molecule test
-        run: molecule test
+      - name: Run Molecule test (default scenario)
+        run: molecule test --scenario-name default
         env:
-          MOLECULE_DISTRO: rockylinux9
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  test-rhel:
+    name: Test - RHEL (8, 9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # Prevent hung jobs
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Molecule and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install ansible.posix
+
+      - name: Run Molecule test (RHEL scenario)
+        run: molecule test --scenario-name rhel
+        env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
 
@@ -145,7 +204,7 @@ jobs:
     name: Integration Test
     runs-on: ubuntu-latest
     timeout-minutes: 15  # Prevent hung jobs
-    needs: [test-ubuntu-22, test-ubuntu-24, test-rocky-9]
+    needs: [test-ubuntu-22, test-ubuntu-24, test-debian, test-rocky-9, test-rhel]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

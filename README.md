@@ -22,6 +22,7 @@
 - [High Availability](#-high-availability)
 - [Monitoring & Logging](#-monitoring--logging)
 - [Backup & Recovery](#-backup--recovery)
+- [Testing](#-testing)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 - [Support](#-support)
@@ -1045,23 +1046,47 @@ wordpress_child_theme:
 
 ### Molecule Testing
 
+The role includes comprehensive Molecule testing scenarios for multiple platforms:
+
 ```bash
 # Install testing dependencies
 pip install molecule molecule-plugins[docker] ansible-lint yamllint
 
-# Run all tests
+# Run all tests (default scenario with Ubuntu 22, 24 and Rocky 9)
 molecule test
 
 # Run specific scenario
-molecule test -s default
-molecule test -s ubuntu-nginx
-molecule test -s rhel-apache
+molecule test -s default  # Ubuntu 22, 24 and Rocky Linux 9
+molecule test -s ubuntu   # Ubuntu 22.04 and 24.04
+molecule test -s debian   # Debian 11 and 12
+molecule test -s rhel     # RHEL 8 and 9 (Rocky Linux)
 
 # Interactive testing
-molecule converge
-molecule verify
-molecule destroy
+molecule converge          # Deploy the role
+molecule verify           # Run verification tests
+molecule destroy          # Clean up test environment
+
+# Run idempotency test
+molecule test --destroy=never
+molecule idempotence
 ```
+
+#### Test Scenarios
+
+| Scenario | Platforms | Purpose |
+|----------|-----------|---------|
+| **default** | Ubuntu 22.04, 24.04, Rocky Linux 9 | Quick testing across major platforms |
+| **ubuntu** | Ubuntu 22.04, 24.04 | Ubuntu-specific testing |
+| **debian** | Debian 11, 12 | Debian-specific testing |
+| **rhel** | Rocky Linux 8, 9 | RHEL/CentOS-compatible testing |
+
+All scenarios include:
+- ✅ Syntax checking
+- ✅ Role deployment
+- ✅ Idempotency verification
+- ✅ Comprehensive validation tests
+
+📖 **For detailed testing documentation, see [TESTING.md](TESTING.md)**
 
 ### Integration Tests
 
