@@ -1,7 +1,8 @@
 ---
 ##
 # Oracle Cloud Infrastructure WordPress Deployment
-# Uses OCI Autonomous Database, Object Storage, and Load Balancer
+# Uses OCI Compute, Autonomous Database, Block Storage, Load Balancer, and Object Storage
+# Optimized for OCI Free Tier and PAUSATF deployments
 ##
 
 - name: Deploy WordPress on Oracle Cloud Infrastructure
@@ -43,6 +44,37 @@
     wordpress_oci_region: "us-ashburn-1"
 
     # ========================================================================
+    # OCI Compute Instance Configuration
+    # ========================================================================
+    wordpress_oci_compartment_id: "{{ vault_oci_compartment_id }}"
+    wordpress_oci_availability_domain: "{{ vault_oci_availability_domain }}"
+    wordpress_oci_subnet_id: "{{ vault_oci_subnet_id }}"
+    wordpress_oci_shape: "VM.Standard.E4.Flex"
+    wordpress_oci_ocpus: 2
+    wordpress_oci_memory_gb: 16
+    wordpress_oci_boot_volume_size_gb: 50
+
+    # ========================================================================
+    # OCI Block Storage for Persistent Data
+    # ========================================================================
+    wordpress_oci_block_storage_enabled: true
+    wordpress_oci_block_volume_size_gb: 100
+    wordpress_oci_block_volume_performance: "Balanced"
+    wordpress_oci_block_volume_mount_point: "/var/www/wordpress"
+    wordpress_oci_block_volume_backup_policy: "bronze"
+
+    # ========================================================================
+    # OCI Load Balancer Integration
+    # ========================================================================
+    wordpress_oci_load_balancer_enabled: true
+    wordpress_oci_lb_shape: "flexible"
+    wordpress_oci_lb_min_bandwidth_mbps: 10
+    wordpress_oci_lb_max_bandwidth_mbps: 100
+    wordpress_oci_lb_backend_set_policy: "ROUND_ROBIN"
+    wordpress_oci_lb_health_check_path: "/wp-admin/install.php"
+    wordpress_oci_lb_health_check_port: 443
+
+    # ========================================================================
     # OCI Autonomous Database (MySQL)
     # ========================================================================
     wordpress_use_external_db: true
@@ -65,13 +97,16 @@
     wordpress_enable_object_cache: true
 
     # ========================================================================
-    # OCI Object Storage
+    # OCI Object Storage for Media and Backups
     # ========================================================================
     wordpress_object_storage_enabled: true
     wordpress_object_storage_provider: "oci_storage"
     wordpress_oci_object_storage_enabled: true
     wordpress_oci_object_storage_bucket: "{{ vault_oci_bucket_name }}"
     wordpress_oci_object_storage_namespace: "{{ vault_oci_namespace }}"
+    wordpress_oci_object_storage_tier: "Standard"
+    wordpress_oci_media_bucket: "{{ vault_oci_bucket_name }}"
+    wordpress_oci_backup_bucket: "{{ vault_oci_backup_bucket_name }}"
     wordpress_object_storage_bucket: "{{ vault_oci_bucket_name }}"
     wordpress_object_storage_region: "us-ashburn-1"
     wordpress_object_storage_path_prefix: "wp-content/uploads"
@@ -126,7 +161,7 @@
     wordpress_backup_retention_days: 30
     wordpress_backup_to_cloud: true
     wordpress_backup_cloud_provider: "oci_storage"
-    wordpress_backup_cloud_bucket: "wordpress-backups"
+    wordpress_backup_cloud_bucket: "{{ vault_oci_backup_bucket_name }}"
 
     # ========================================================================
     # Monitoring & Logging

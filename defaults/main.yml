@@ -350,9 +350,39 @@ wordpress_oci_user: ""
 wordpress_oci_fingerprint: ""
 wordpress_oci_key_file: ""
 wordpress_oci_region: ""
+
+# OCI Compute instance provisioning
+wordpress_oci_compartment_id: ""
+wordpress_oci_availability_domain: ""
+wordpress_oci_subnet_id: ""
+wordpress_oci_shape: "VM.Standard.E4.Flex"
+wordpress_oci_ocpus: 2
+wordpress_oci_memory_gb: 16
+wordpress_oci_boot_volume_size_gb: 50
+
+# OCI Block Storage for persistent data
+wordpress_oci_block_storage_enabled: false
+wordpress_oci_block_volume_size_gb: 100
+wordpress_oci_block_volume_performance: "Balanced"  # Balanced, Higher Performance, Ultra High Performance
+wordpress_oci_block_volume_mount_point: "/var/www/wordpress"
+wordpress_oci_block_volume_backup_policy: "bronze"  # bronze, silver, gold
+
+# OCI Load Balancer integration
+wordpress_oci_load_balancer_enabled: false
+wordpress_oci_lb_shape: "flexible"
+wordpress_oci_lb_min_bandwidth_mbps: 10
+wordpress_oci_lb_max_bandwidth_mbps: 100
+wordpress_oci_lb_backend_set_policy: "ROUND_ROBIN"  # ROUND_ROBIN, LEAST_CONNECTIONS, IP_HASH
+wordpress_oci_lb_health_check_path: "/wp-admin/install.php"
+wordpress_oci_lb_health_check_port: 443
+
+# OCI Object Storage for media and backups
 wordpress_oci_object_storage_enabled: false
 wordpress_oci_object_storage_bucket: ""
 wordpress_oci_object_storage_namespace: ""
+wordpress_oci_object_storage_tier: "Standard"  # Standard or Archive
+wordpress_oci_backup_bucket: "wordpress-backups"
+wordpress_oci_media_bucket: "wordpress-media"
 
 # ============================================================================
 # External Database Configuration
