@@ -32,6 +32,7 @@
     - wordpress_db_root_password is defined
   register: mysql_root_password_set
   failed_when: false
+  no_log: true
 
 - name: Create MySQL root configuration file
   ansible.builtin.template:
@@ -52,6 +53,7 @@
     login_password: "{{ wordpress_db_root_password }}"
   become: true
   when: not wordpress_use_external_db | bool
+  no_log: true
 
 - name: Remove MySQL test database
   community.mysql.mysql_db:
@@ -61,6 +63,7 @@
     login_password: "{{ wordpress_db_root_password }}"
   become: true
   when: not wordpress_use_external_db | bool
+  no_log: true
 
 - name: Remove remote root user access
   community.mysql.mysql_user:
@@ -79,6 +82,7 @@
     - not wordpress_use_external_db | bool
     - item != "localhost"
   failed_when: false
+  no_log: true
 
 - name: Create WordPress database
   community.mysql.mysql_db:
@@ -89,6 +93,7 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
+  no_log: true
 
 - name: Create WordPress database user
   community.mysql.mysql_user:
@@ -100,6 +105,7 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
+  no_log: true
 
 - name: Configure MySQL/MariaDB for WordPress
   ansible.builtin.template:
@@ -181,6 +187,7 @@
     login_password: "{{ wordpress_db_root_password }}"
   become: true
   when: not wordpress_use_external_db | bool
+  no_log: true
 
 - name: Test database connection
   community.mysql.mysql_query:
@@ -192,6 +199,7 @@
     login_db: "{{ wordpress_db_name }}"
   register: db_connection_test
   changed_when: false
+  no_log: true
 
 - name: Display database connection status
   ansible.builtin.debug:
@@ -210,6 +218,7 @@
   when:
     - not wordpress_use_external_db | bool
     - wordpress_enable_logging | bool
+  no_log: true
 
 - name: Configure external database SSL (if enabled)
   when:
