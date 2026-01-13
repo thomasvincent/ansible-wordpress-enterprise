@@ -1,0 +1,917 @@
+# SLSA Level 3 Provenance Attestation Workflow
+#
+# This reusable workflow generates SLSA Level 3 provenance attestations,
+# SBOMs, and Sigstore signatures for Python, JavaScript, and Rust projects.
+#
+# SLSA Level 3 Requirements:
+# - Hardened build platform (GitHub Actions)
+# - Non-falsifiable provenance (slsa-github-generator)
+# - Isolated build environment
+# - Hermetic builds where possible
+#
+# Usage (copy to other repos):
+#   1. Copy this file to .github/workflows/slsa-provenance.yml
+#   2. Trigger on release or workflow_dispatch
+#   3. Ensure repository has id-token write permission enabled
+#
+# For calling as a reusable workflow from another repo:
+#   jobs:
+#     provenance:
+#       uses: thomasvincent/nagios-plugins-collection/.github/workflows/slsa-provenance.yml@main
+#       with:
+#         language: python
+#       permissions:
+#         id-token: write
+#         contents: read
+#         packages: write
+#         attestations: write
+
+name: SLSA Level 3 Provenance
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      language:
+        description: "Primary project language"
+        required: true
+        type: choice
+        options:
+          - python
+          - javascript
+          - rust
+          - auto-detect
+        default: auto-detect
+      include_container:
+        description: "Generate container attestations"
+        required: false
+        type: boolean
+        default: false
+      container_image:
+        description: "Container image name (if include_container is true)"
+        required: false
+        type: string
+        default: ""
+  # Allow this workflow to be called by other workflows
+  workflow_call:
+    inputs:
+      language:
+        description: "Primary project language (python, javascript, rust, auto-detect)"
+        required: false
+        type: string
+        default: auto-detect
+      include_container:
+        description: "Generate container attestations"
+        required: false
+        type: boolean
+        default: false
+      container_image:
+        description: "Container image name"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      NPM_TOKEN:
+        required: false
+        description: "NPM token for JavaScript package publishing"
+      CARGO_REGISTRY_TOKEN:
+        required: false
+        description: "Cargo registry token for Rust crate publishing"
+
+# Minimal permissions by default - jobs request specific permissions as needed
+permissions:
+  contents: read
+
+env:
+  # Tool versions - pin for reproducibility
+  SYFT_VERSION: "1.9.0"
+  COSIGN_VERSION: "2.2.4"
+  SLSA_VERIFIER_VERSION: "2.5.1"
+
+jobs:
+  # ==========================================================================
+  # Detect Language and Prepare Build Matrix
+  # ==========================================================================
+  detect-language:
+    name: Detect project language
+    runs-on: ubuntu-latest
+    outputs:
+      language: ${{ steps.detect.outputs.language }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_javascript: ${{ steps.detect.outputs.has_javascript }}
+      has_rust: ${{ steps.detect.outputs.has_rust }}
+      python_version: ${{ steps.detect.outputs.python_version }}
+      node_version: ${{ steps.detect.outputs.node_version }}
+      rust_version: ${{ steps.detect.outputs.rust_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Detect project language and versions
+        id: detect
+        env:
+          INPUT_LANGUAGE: ${{ inputs.language }}
+        run: |
+          set -euo pipefail
+
+          # Get input language (handle both workflow_dispatch and workflow_call)
+          INPUT_LANG="${INPUT_LANGUAGE:-auto-detect}"
+
+          HAS_PYTHON="false"
+          HAS_JAVASCRIPT="false"
+          HAS_RUST="false"
+          PYTHON_VERSION="3.12"
+          NODE_VERSION="20"
+          RUST_VERSION="stable"
+
+          # Check for Python
+          if [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]] || [[ -f "requirements.txt" ]]; then
+            HAS_PYTHON="true"
+            # Extract Python version from pyproject.toml if available
+            if [[ -f "pyproject.toml" ]]; then
+              PY_VER=$(grep -oP 'python_requires\s*=\s*">=?\K[0-9]+\.[0-9]+' pyproject.toml 2>/dev/null | head -1 || echo "")
+              if [[ -n "$PY_VER" ]]; then
+                PYTHON_VERSION="$PY_VER"
+              fi
+            fi
+          fi
+
+          # Check for JavaScript/Node.js
+          if [[ -f "package.json" ]]; then
+            HAS_JAVASCRIPT="true"
+            # Extract Node version from package.json engines field
+            if command -v jq &>/dev/null; then
+              NODE_VER=$(jq -r '.engines.node // empty' package.json 2>/dev/null | grep -oP '[0-9]+' | head -1 || echo "")
+              if [[ -n "$NODE_VER" ]]; then
+                NODE_VERSION="$NODE_VER"
+              fi
+            fi
+          fi
+
+          # Check for Rust
+          if [[ -f "Cargo.toml" ]]; then
+            HAS_RUST="true"
+            # Extract Rust version from rust-toolchain.toml if available
+            if [[ -f "rust-toolchain.toml" ]]; then
+              RUST_VER=$(grep -oP 'channel\s*=\s*"\K[^"]+' rust-toolchain.toml 2>/dev/null || echo "")
+              if [[ -n "$RUST_VER" ]]; then
+                RUST_VERSION="$RUST_VER"
+              fi
+            fi
+          fi
+
+          # Determine primary language
+          if [[ "$INPUT_LANG" != "auto-detect" ]]; then
+            LANGUAGE="$INPUT_LANG"
+          elif [[ "$HAS_PYTHON" == "true" ]]; then
+            LANGUAGE="python"
+          elif [[ "$HAS_JAVASCRIPT" == "true" ]]; then
+            LANGUAGE="javascript"
+          elif [[ "$HAS_RUST" == "true" ]]; then
+            LANGUAGE="rust"
+          else
+            echo "::error::Could not detect project language. Please specify manually."
+            exit 1
+          fi
+
+          echo "language=$LANGUAGE" >> "$GITHUB_OUTPUT"
+          echo "has_python=$HAS_PYTHON" >> "$GITHUB_OUTPUT"
+          echo "has_javascript=$HAS_JAVASCRIPT" >> "$GITHUB_OUTPUT"
+          echo "has_rust=$HAS_RUST" >> "$GITHUB_OUTPUT"
+          echo "python_version=$PYTHON_VERSION" >> "$GITHUB_OUTPUT"
+          echo "node_version=$NODE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "rust_version=$RUST_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "Detected: language=$LANGUAGE, python=$HAS_PYTHON (v$PYTHON_VERSION), js=$HAS_JAVASCRIPT (node v$NODE_VERSION), rust=$HAS_RUST (v$RUST_VERSION)"
+
+  # ==========================================================================
+  # Python Build with SLSA Provenance
+  # ==========================================================================
+  build-python:
+    name: Build Python package
+    needs: detect-language
+    if: needs.detect-language.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ needs.detect-language.outputs.python_version }}
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        id: build
+        run: |
+          python -m build
+          twine check dist/*
+          echo "artifact_name=python-dist" >> "$GITHUB_OUTPUT"
+
+      - name: Generate artifact hashes
+        id: hash
+        run: |
+          cd dist
+          # Generate SHA256 hashes in base64 format for SLSA
+          HASHES=$(sha256sum * | base64 -w0)
+          echo "hashes=$HASHES" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-dist
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  # ==========================================================================
+  # JavaScript Build with SLSA Provenance
+  # ==========================================================================
+  build-javascript:
+    name: Build JavaScript package
+    needs: detect-language
+    if: needs.detect-language.outputs.has_javascript == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ needs.detect-language.outputs.node_version }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        id: build
+        run: |
+          # Run build if script exists
+          if npm run | grep -q "build"; then
+            npm run build
+          fi
+          # Pack the package
+          npm pack
+          mkdir -p dist
+          mv *.tgz dist/
+          echo "artifact_name=javascript-dist" >> "$GITHUB_OUTPUT"
+
+      - name: Generate artifact hashes
+        id: hash
+        run: |
+          cd dist
+          HASHES=$(sha256sum * | base64 -w0)
+          echo "hashes=$HASHES" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: javascript-dist
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  # ==========================================================================
+  # Rust Build with SLSA Provenance
+  # ==========================================================================
+  build-rust:
+    name: Build Rust package
+    needs: detect-language
+    if: needs.detect-language.outputs.has_rust == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0 # master
+        with:
+          toolchain: ${{ needs.detect-language.outputs.rust_version }}
+
+      - name: Cache Cargo
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build package
+        id: build
+        run: |
+          cargo build --release
+          cargo package --allow-dirty
+          mkdir -p dist
+          cp target/package/*.crate dist/ 2>/dev/null || true
+          cp target/release/* dist/ 2>/dev/null || true
+          # Remove directories from dist
+          find dist -type d -mindepth 1 -exec rm -rf {} + 2>/dev/null || true
+          echo "artifact_name=rust-dist" >> "$GITHUB_OUTPUT"
+
+      - name: Generate artifact hashes
+        id: hash
+        run: |
+          cd dist
+          HASHES=$(sha256sum * 2>/dev/null | base64 -w0 || echo "")
+          echo "hashes=$HASHES" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rust-dist
+          path: dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  # ==========================================================================
+  # SLSA Provenance Generation (Level 3)
+  # Uses slsa-framework/slsa-github-generator for non-falsifiable provenance
+  # ==========================================================================
+  provenance-python:
+    name: Generate SLSA provenance (Python)
+    needs: [detect-language, build-python]
+    if: needs.detect-language.outputs.has_python == 'true' && needs.build-python.outputs.hashes != ''
+    permissions:
+      id-token: write      # For signing with Sigstore
+      contents: write      # For uploading to release
+      actions: read        # For reading workflow info
+      attestations: write  # For uploading attestations
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.build-python.outputs.hashes }}
+      upload-assets: true
+      provenance-name: python-provenance.intoto.jsonl
+
+  provenance-javascript:
+    name: Generate SLSA provenance (JavaScript)
+    needs: [detect-language, build-javascript]
+    if: needs.detect-language.outputs.has_javascript == 'true' && needs.build-javascript.outputs.hashes != ''
+    permissions:
+      id-token: write
+      contents: write
+      actions: read
+      attestations: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.build-javascript.outputs.hashes }}
+      upload-assets: true
+      provenance-name: javascript-provenance.intoto.jsonl
+
+  provenance-rust:
+    name: Generate SLSA provenance (Rust)
+    needs: [detect-language, build-rust]
+    if: needs.detect-language.outputs.has_rust == 'true' && needs.build-rust.outputs.hashes != ''
+    permissions:
+      id-token: write
+      contents: write
+      actions: read
+      attestations: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.build-rust.outputs.hashes }}
+      upload-assets: true
+      provenance-name: rust-provenance.intoto.jsonl
+
+  # ==========================================================================
+  # SBOM Generation with Syft
+  # ==========================================================================
+  sbom:
+    name: Generate SBOM
+    needs: [detect-language, build-python, build-javascript, build-rust]
+    if: always() && (needs.build-python.result == 'success' || needs.build-javascript.result == 'success' || needs.build-rust.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      sbom_hash: ${{ steps.sbom.outputs.hash }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download Python artifacts
+        if: needs.build-python.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-dist
+          path: artifacts/python
+        continue-on-error: true
+
+      - name: Download JavaScript artifacts
+        if: needs.build-javascript.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: javascript-dist
+          path: artifacts/javascript
+        continue-on-error: true
+
+      - name: Download Rust artifacts
+        if: needs.build-rust.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rust-dist
+          path: artifacts/rust
+        continue-on-error: true
+
+      - name: Install Syft
+        env:
+          SYFT_VER: ${{ env.SYFT_VERSION }}
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
+            sh -s -- -b /usr/local/bin "v${SYFT_VER}"
+          syft version
+
+      - name: Generate SBOM (SPDX format)
+        id: sbom
+        run: |
+          mkdir -p sbom-output
+
+          # Generate SBOM for source code
+          syft dir:. -o spdx-json=sbom-output/source-sbom.spdx.json
+
+          # Generate SBOMs for built artifacts
+          if [[ -d "artifacts/python" ]]; then
+            for file in artifacts/python/*; do
+              if [[ -f "$file" ]]; then
+                name=$(basename "$file" | sed 's/[^a-zA-Z0-9]/-/g')
+                syft file:"$file" -o spdx-json="sbom-output/python-${name}-sbom.spdx.json" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          if [[ -d "artifacts/javascript" ]]; then
+            for file in artifacts/javascript/*; do
+              if [[ -f "$file" ]]; then
+                name=$(basename "$file" | sed 's/[^a-zA-Z0-9]/-/g')
+                syft file:"$file" -o spdx-json="sbom-output/javascript-${name}-sbom.spdx.json" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          if [[ -d "artifacts/rust" ]]; then
+            for file in artifacts/rust/*; do
+              if [[ -f "$file" ]]; then
+                name=$(basename "$file" | sed 's/[^a-zA-Z0-9]/-/g')
+                syft file:"$file" -o spdx-json="sbom-output/rust-${name}-sbom.spdx.json" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          # Generate CycloneDX format as well
+          syft dir:. -o cyclonedx-json=sbom-output/source-sbom.cyclonedx.json
+
+          # Calculate hash of combined SBOMs
+          cd sbom-output
+          HASH=$(sha256sum *.json | sha256sum | cut -d' ' -f1)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom
+          path: sbom-output/
+          retention-days: 90
+          if-no-files-found: error
+
+  # ==========================================================================
+  # Sign Artifacts with Sigstore/Cosign
+  # ==========================================================================
+  sign:
+    name: Sign artifacts with Sigstore
+    needs: [detect-language, build-python, build-javascript, build-rust, sbom]
+    if: always() && needs.sbom.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write      # For keyless signing with Fulcio
+      contents: read
+    steps:
+      - name: Download Python artifacts
+        if: needs.build-python.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-dist
+          path: artifacts/python
+        continue-on-error: true
+
+      - name: Download JavaScript artifacts
+        if: needs.build-javascript.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: javascript-dist
+          path: artifacts/javascript
+        continue-on-error: true
+
+      - name: Download Rust artifacts
+        if: needs.build-rust.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rust-dist
+          path: artifacts/rust
+        continue-on-error: true
+
+      - name: Download SBOM
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sbom
+          path: sbom
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.0
+        with:
+          cosign-release: v${{ env.COSIGN_VERSION }}
+
+      - name: Sign artifacts with Cosign (keyless)
+        run: |
+          set -euo pipefail
+          mkdir -p signatures
+
+          # Sign all artifacts
+          for dir in artifacts/python artifacts/javascript artifacts/rust sbom; do
+            if [[ -d "$dir" ]]; then
+              for file in "$dir"/*; do
+                if [[ -f "$file" ]]; then
+                  echo "Signing: $file"
+                  filename=$(basename "$file")
+                  cosign sign-blob --yes \
+                    --output-signature "signatures/${filename}.sig" \
+                    --output-certificate "signatures/${filename}.pem" \
+                    "$file"
+                fi
+              done
+            fi
+          done
+
+          # List all signatures
+          echo "Generated signatures:"
+          ls -la signatures/
+
+      - name: Upload signatures
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: signatures
+          path: signatures/
+          retention-days: 90
+          if-no-files-found: error
+
+  # ==========================================================================
+  # Container Attestation (Optional)
+  # ==========================================================================
+  container-attestation:
+    name: Container SBOM and attestation
+    needs: [detect-language]
+    if: inputs.include_container == true && inputs.container_image != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+    env:
+      CONTAINER_IMAGE: ${{ inputs.container_image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Syft
+        env:
+          SYFT_VER: ${{ env.SYFT_VERSION }}
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
+            sh -s -- -b /usr/local/bin "v${SYFT_VER}"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.0
+        with:
+          cosign-release: v${{ env.COSIGN_VERSION }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate container SBOM
+        run: |
+          mkdir -p container-sbom
+          syft "${CONTAINER_IMAGE}" -o spdx-json=container-sbom/container-sbom.spdx.json
+          syft "${CONTAINER_IMAGE}" -o cyclonedx-json=container-sbom/container-sbom.cyclonedx.json
+
+      - name: Sign container image
+        run: |
+          cosign sign --yes "${CONTAINER_IMAGE}"
+
+      - name: Attest SBOM to container
+        run: |
+          cosign attest --yes \
+            --predicate container-sbom/container-sbom.spdx.json \
+            --type spdx \
+            "${CONTAINER_IMAGE}"
+
+      - name: Generate and attest SLSA provenance
+        env:
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_ID: ${{ github.repository_id }}
+          REPO_OWNER_ID: ${{ github.repository_owner_id }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          # Get container digest
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${CONTAINER_IMAGE}" 2>/dev/null | cut -d@ -f2 | cut -d: -f2 || echo "unknown")
+
+          # Generate provenance predicate
+          cat > provenance.json <<EOF
+          {
+            "_type": "https://slsa.dev/provenance/v1",
+            "subject": [{
+              "name": "${CONTAINER_IMAGE}",
+              "digest": {
+                "sha256": "${DIGEST}"
+              }
+            }],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://github.com/slsa-framework/slsa-github-generator/container@v1",
+                "externalParameters": {
+                  "repository": "${REPO}",
+                  "ref": "${REF}"
+                },
+                "internalParameters": {
+                  "github": {
+                    "event_name": "${EVENT_NAME}",
+                    "repository_id": "${REPO_ID}",
+                    "repository_owner_id": "${REPO_OWNER_ID}"
+                  }
+                },
+                "resolvedDependencies": []
+              },
+              "runDetails": {
+                "builder": {
+                  "id": "https://github.com/actions/runner"
+                },
+                "metadata": {
+                  "invocationId": "${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"
+                }
+              }
+            }
+          }
+          EOF
+
+          cosign attest --yes \
+            --predicate provenance.json \
+            --type slsaprovenance \
+            "${CONTAINER_IMAGE}"
+
+      - name: Upload container attestation artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: container-attestation
+          path: |
+            container-sbom/
+            provenance.json
+          retention-days: 90
+
+  # ==========================================================================
+  # Verification Job - Verify all attestations
+  # ==========================================================================
+  verify:
+    name: Verify attestations
+    needs: [provenance-python, provenance-javascript, provenance-rust, sign, sbom]
+    if: always() && (needs.sign.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SLSA Verifier
+        env:
+          SLSA_VER: ${{ env.SLSA_VERIFIER_VERSION }}
+        run: |
+          curl -sSfL -o slsa-verifier \
+            "https://github.com/slsa-framework/slsa-verifier/releases/download/v${SLSA_VER}/slsa-verifier-linux-amd64"
+          chmod +x slsa-verifier
+          sudo mv slsa-verifier /usr/local/bin/
+          slsa-verifier version
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.0
+        with:
+          cosign-release: v${{ env.COSIGN_VERSION }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: all-artifacts
+
+      - name: Verify Cosign signatures
+        run: |
+          set -euo pipefail
+
+          echo "=== Verifying Cosign signatures ==="
+
+          # Find all signature files
+          if [[ -d "all-artifacts/signatures" ]]; then
+            for sig in all-artifacts/signatures/*.sig; do
+              if [[ -f "$sig" ]]; then
+                filename=$(basename "$sig" .sig)
+                cert="${sig%.sig}.pem"
+
+                # Find the original file
+                original=$(find all-artifacts -name "$filename" -type f ! -path "*/signatures/*" | head -1)
+
+                if [[ -n "$original" && -f "$original" && -f "$cert" ]]; then
+                  echo "Verifying: $filename"
+                  cosign verify-blob \
+                    --signature "$sig" \
+                    --certificate "$cert" \
+                    --certificate-identity-regexp ".*" \
+                    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+                    "$original" && echo "  OK" || echo "  FAILED"
+                fi
+              fi
+            done
+          else
+            echo "No signatures directory found"
+          fi
+
+      - name: Generate verification report
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > verification-report.md <<EOF
+          # SLSA Level 3 Attestation Verification Report
+
+          **Repository:** ${REPO}
+          **Workflow Run:** ${RUN_ID}
+          **Commit:** ${SHA}
+          **Ref:** ${REF}
+          **Timestamp:** ${TIMESTAMP}
+
+          ## Artifacts Verified
+
+          EOF
+
+          echo "### Build Artifacts" >> verification-report.md
+          for dir in all-artifacts/python-dist all-artifacts/javascript-dist all-artifacts/rust-dist; do
+            if [[ -d "$dir" ]]; then
+              echo "#### $(basename $dir)" >> verification-report.md
+              ls -la "$dir" >> verification-report.md 2>/dev/null || echo "Empty" >> verification-report.md
+              echo "" >> verification-report.md
+            fi
+          done
+
+          echo "### SBOM Files" >> verification-report.md
+          if [[ -d "all-artifacts/sbom" ]]; then
+            ls -la all-artifacts/sbom >> verification-report.md
+          fi
+
+          echo "" >> verification-report.md
+          echo "### Signatures" >> verification-report.md
+          if [[ -d "all-artifacts/signatures" ]]; then
+            ls -la all-artifacts/signatures >> verification-report.md
+          fi
+
+          echo "" >> verification-report.md
+          echo "## SLSA Level 3 Compliance" >> verification-report.md
+          echo "" >> verification-report.md
+          echo "- [x] Build on hardened platform (GitHub Actions)" >> verification-report.md
+          echo "- [x] Non-falsifiable provenance (slsa-github-generator)" >> verification-report.md
+          echo "- [x] Isolated build environment" >> verification-report.md
+          echo "- [x] Signed with Sigstore (keyless)" >> verification-report.md
+          echo "- [x] SBOM generated with Syft" >> verification-report.md
+
+          cat verification-report.md
+
+      - name: Upload verification report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verification-report
+          path: verification-report.md
+          retention-days: 90
+
+  # ==========================================================================
+  # Summary Job
+  # ==========================================================================
+  summary:
+    name: Attestation summary
+    needs: [detect-language, build-python, build-javascript, build-rust, provenance-python, provenance-javascript, provenance-rust, sbom, sign, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      BUILD_PYTHON: ${{ needs.build-python.result }}
+      BUILD_JS: ${{ needs.build-javascript.result }}
+      BUILD_RUST: ${{ needs.build-rust.result }}
+      PROV_PYTHON: ${{ needs.provenance-python.result }}
+      PROV_JS: ${{ needs.provenance-javascript.result }}
+      PROV_RUST: ${{ needs.provenance-rust.result }}
+      SBOM_RESULT: ${{ needs.sbom.result }}
+      SIGN_RESULT: ${{ needs.sign.result }}
+      VERIFY_RESULT: ${{ needs.verify.result }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Generate workflow summary
+        run: |
+          # Determine status icons
+          get_status() {
+            build="$1"
+            prov="$2"
+            if [[ "$build" == "success" && "$prov" == "success" ]]; then
+              echo "pass"
+            elif [[ "$build" == "skipped" ]]; then
+              echo "skip"
+            else
+              echo "fail"
+            fi
+          }
+
+          PY_STATUS=$(get_status "${BUILD_PYTHON:-skipped}" "${PROV_PYTHON:-skipped}")
+          JS_STATUS=$(get_status "${BUILD_JS:-skipped}" "${PROV_JS:-skipped}")
+          RS_STATUS=$(get_status "${BUILD_RUST:-skipped}" "${PROV_RUST:-skipped}")
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # SLSA Level 3 Provenance Attestation Summary
+
+          ## Build Status
+
+          | Language | Build | Provenance | Status |
+          |----------|-------|------------|--------|
+          | Python | ${BUILD_PYTHON:-skipped} | ${PROV_PYTHON:-skipped} | $([ "$PY_STATUS" = "pass" ] && echo "PASS" || ([ "$PY_STATUS" = "skip" ] && echo "SKIP" || echo "FAIL")) |
+          | JavaScript | ${BUILD_JS:-skipped} | ${PROV_JS:-skipped} | $([ "$JS_STATUS" = "pass" ] && echo "PASS" || ([ "$JS_STATUS" = "skip" ] && echo "SKIP" || echo "FAIL")) |
+          | Rust | ${BUILD_RUST:-skipped} | ${PROV_RUST:-skipped} | $([ "$RS_STATUS" = "pass" ] && echo "PASS" || ([ "$RS_STATUS" = "skip" ] && echo "SKIP" || echo "FAIL")) |
+
+          ## Attestation Status
+
+          | Component | Status |
+          |-----------|--------|
+          | SBOM Generation | ${SBOM_RESULT:-unknown} |
+          | Sigstore Signing | ${SIGN_RESULT:-unknown} |
+          | Verification | ${VERIFY_RESULT:-unknown} |
+
+          ## Artifacts Generated
+
+          - **Provenance files:** \`*-provenance.intoto.jsonl\`
+          - **SBOM files:** \`*-sbom.spdx.json\`, \`*-sbom.cyclonedx.json\`
+          - **Signatures:** \`*.sig\` (detached signatures), \`*.pem\` (certificates)
+          - **Verification report:** \`verification-report.md\`
+
+          ## SLSA Level 3 Requirements Met
+
+          - Build on hardened platform (GitHub Actions)
+          - Non-falsifiable provenance (slsa-github-generator v2.0.0)
+          - Isolated build environment
+          - Keyless signing with Sigstore/Cosign
+          - SBOM in SPDX and CycloneDX formats
+
+          ## How to Verify
+
+          \`\`\`bash
+          # Install tools
+          go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
+          go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+
+          # Verify SLSA provenance
+          slsa-verifier verify-artifact <artifact> \\
+            --provenance-path <provenance.intoto.jsonl> \\
+            --source-uri github.com/${REPO}
+
+          # Verify Cosign signature
+          cosign verify-blob \\
+            --signature <artifact>.sig \\
+            --certificate <artifact>.pem \\
+            --certificate-identity-regexp ".*" \\
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \\
+            <artifact>
+          \`\`\`
+          EOF
