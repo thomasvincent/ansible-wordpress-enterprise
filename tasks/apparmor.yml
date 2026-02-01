@@ -392,6 +392,7 @@
     - apparmor_enabled | default(false)
     - wordpress_apparmor_mode == "complain"
   become: true
+  changed_when: true
   failed_when: false
 
 - name: Configure AppArmor enforce mode for production
@@ -406,6 +407,7 @@
     - apparmor_enabled | default(false)
     - wordpress_apparmor_mode == "enforce"
   become: true
+  changed_when: true
   failed_when: false
 
 - name: Install AppArmor log analyzer
@@ -530,6 +532,10 @@
     - restart auditd
 
 - name: Validate AppArmor profiles
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_validate | default(true)
   block:
     - name: Check AppArmor profile syntax
       ansible.builtin.command: apparmor_parser -T {{ item }}
@@ -557,6 +563,7 @@
         - /etc/apparmor.d/wordpress-wpcli
       when: wordpress_apparmor_load_profiles | default(true)
       become: true
+      changed_when: true
       failed_when: false
 
     - name: Check loaded profiles status
@@ -567,7 +574,3 @@
     - name: Display loaded AppArmor profiles
       ansible.builtin.debug:
         msg: "{{ apparmor_loaded_status.stdout_lines | select('match', '.*wordpress.*') | list }}"
-  when:
-    - ansible_os_family == "Debian"
-    - apparmor_enabled | default(false)
-    - wordpress_apparmor_validate | default(true)
