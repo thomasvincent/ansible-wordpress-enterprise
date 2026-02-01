@@ -186,6 +186,8 @@
         - wordpress_install_security_tools | default(true)
 
     - name: Configure automatic security updates
+      become: true
+      when: wordpress_auto_security_updates | default(true)
       block:
         - name: Install unattended-upgrades (Debian/Ubuntu)
           ansible.builtin.package:
@@ -216,10 +218,9 @@
           when: ansible_os_family == "RedHat"
           notify:
             - restart yum-cron
-      become: true
-      when: wordpress_auto_security_updates | default(true)
 
     - name: Configure system-wide security settings
+      become: true
       block:
         - name: Disable unused network services
           ansible.builtin.systemd:
@@ -284,7 +285,6 @@
               value: '7'
           become: true
           when: wordpress_password_policy | default(true)
-      become: true
 
 - name: Generate security status report
   ansible.builtin.template:
@@ -376,6 +376,7 @@
       Run 'wordpress-security-status' to check current security status.
 
 - name: Validate security configuration
+  when: wordpress_security_validate | default(true)
   block:
     - name: Test file permissions
       ansible.builtin.stat:
@@ -405,4 +406,3 @@
           wp-config.php permissions: {{ wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found' }}
           uploads directory permissions: {{ wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found' }}
           Security services status: {{ security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ') }}
-  when: wordpress_security_validate | default(true)

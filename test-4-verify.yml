@@ -44,35 +44,35 @@
 
   tasks:
     - name: Test external database connectivity
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ wordpress_db_host }}"
         port: "{{ wordpress_db_port }}"
         timeout: 10
 
     - name: Install prerequisites
-      include_tasks: tasks/prerequisites.yml
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
 
     - name: Install and configure PHP
-      include_tasks: tasks/php.yml
+      ansible.builtin.include_tasks: tasks/php.yml
 
     - name: Install and configure web server
-      include_tasks: tasks/webserver.yml
+      ansible.builtin.include_tasks: tasks/webserver.yml
 
     - name: Install WordPress
-      include_tasks: tasks/wordpress_install.yml
+      ansible.builtin.include_tasks: tasks/wordpress_install.yml
 
     - name: Configure WordPress
-      include_tasks: tasks/wordpress_config.yml
+      ansible.builtin.include_tasks: tasks/wordpress_config.yml
 
     - name: Verify WordPress Installation
       block:
         - name: Check WordPress directory exists
-          stat:
+          ansible.builtin.stat:
             path: "{{ wordpress_install_dir }}"
           register: wp_dir
 
         - name: Verify WordPress directory exists
-          assert:
+          ansible.builtin.assert:
             that:
               - wp_dir.stat.exists
               - wp_dir.stat.isdir
@@ -80,7 +80,7 @@
             success_msg: "WordPress directory exists"
 
         - name: Check for WordPress core files
-          stat:
+          ansible.builtin.stat:
             path: "{{ wordpress_install_dir }}/{{ item }}"
           register: wp_files
           loop:
@@ -91,7 +91,7 @@
             - wp-blog-header.php
 
         - name: Verify WordPress core files exist
-          assert:
+          ansible.builtin.assert:
             that:
               - item.stat.exists
             fail_msg: "WordPress core file {{ item.item }} is missing"
@@ -99,7 +99,7 @@
           loop: "{{ wp_files.results }}"
 
         - name: Check WordPress directories
-          stat:
+          ansible.builtin.stat:
             path: "{{ wordpress_install_dir }}/{{ item }}"
           register: wp_dirs
           loop:
@@ -108,7 +108,7 @@
             - wp-admin
 
         - name: Verify WordPress directories exist
-          assert:
+          ansible.builtin.assert:
             that:
               - item.stat.exists
               - item.stat.isdir
@@ -117,12 +117,12 @@
           loop: "{{ wp_dirs.results }}"
 
         - name: Check file ownership
-          stat:
+          ansible.builtin.stat:
             path: "{{ wordpress_install_dir }}/index.php"
           register: wp_ownership
 
         - name: Verify file ownership
-          assert:
+          ansible.builtin.assert:
             that:
               - wp_ownership.stat.pw_name == "www-data"
               - wp_ownership.stat.gr_name == "www-data"
@@ -130,7 +130,7 @@
             success_msg: "WordPress files have correct ownership"
 
         - name: Display installation summary
-          debug:
+          ansible.builtin.debug:
             msg:
               - "WordPress installation completed successfully!"
               - "Installation directory: {{ wordpress_install_dir }}"
@@ -140,17 +140,17 @@
               - "PHP version: {{ wordpress_php_version }}"
 
         - name: List installed WordPress files (sample)
-          find:
+          ansible.builtin.find:
             paths: "{{ wordpress_install_dir }}"
             patterns: "wp-*.php"
           register: wp_core_files
 
         - name: Show WordPress core files
-          debug:
+          ansible.builtin.debug:
             msg: "Found {{ wp_core_files.files | length }} WordPress core PHP files"
 
         - name: Check wp-config.php content
-          lineinfile:
+          ansible.builtin.lineinfile:
             path: "{{ wordpress_install_dir }}/wp-config.php"
             line: "define( 'DB_NAME', '{{ wordpress_db_name }}' );"
             state: present
@@ -158,7 +158,7 @@
           register: wp_config_check
 
         - name: Verify wp-config.php is properly configured
-          assert:
+          ansible.builtin.assert:
             that:
               - not wp_config_check.changed
             fail_msg: "wp-config.php is not properly configured with database settings"

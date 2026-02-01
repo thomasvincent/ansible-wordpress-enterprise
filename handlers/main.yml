@@ -1,6 +1,8 @@
 ---
 # Handlers for ansible-wordpress-enterprise
+# NOTE: Each handler should only be defined once to avoid unexpected behavior
 
+# PHP-FPM Handlers
 - name: Restart php-fpm
   ansible.builtin.systemd:
     name: "{{ wordpress_php_fpm_service }}"
@@ -8,6 +10,21 @@
     daemon_reload: true
   become: true
 
+- name: Restart php8.1-fpm
+  ansible.builtin.systemd:
+    name: php8.1-fpm
+    state: restarted
+    daemon_reload: true
+  become: true
+
+- name: Restart php8.2-fpm
+  ansible.builtin.systemd:
+    name: php8.2-fpm
+    state: restarted
+    daemon_reload: true
+  become: true
+
+# Nginx Handlers
 - name: Reload nginx
   ansible.builtin.systemd:
     name: nginx
@@ -20,30 +37,33 @@
     state: restarted
   become: true
 
+# Apache Handlers
 - name: Reload apache
   ansible.builtin.systemd:
-    name: "{{ wordpress_apache_service }}"
+    name: "{{ wordpress_apache_service | default('apache2') }}"
     state: reloaded
   become: true
 
 - name: Restart apache
   ansible.builtin.systemd:
-    name: "{{ wordpress_apache_service }}"
+    name: "{{ wordpress_apache_service | default('apache2') }}"
     state: restarted
   become: true
 
+# Database Handlers
 - name: Restart mysql
   ansible.builtin.systemd:
-    name: "{{ wordpress_mysql_service }}"
+    name: "{{ wordpress_mysql_service | default('mysql') }}"
     state: restarted
   become: true
 
 - name: Restart mariadb
   ansible.builtin.systemd:
-    name: "{{ wordpress_mariadb_service }}"
+    name: "{{ wordpress_mariadb_service | default('mariadb') }}"
     state: restarted
   become: true
 
+# Cache Handlers
 - name: Restart redis
   ansible.builtin.systemd:
     name: redis
@@ -56,6 +76,7 @@
     state: restarted
   become: true
 
+# Security Handlers
 - name: Restart fail2ban
   ansible.builtin.systemd:
     name: fail2ban
@@ -68,88 +89,6 @@
     state: reloaded
   become: true
 
-- name: Restart php-fpm
-  ansible.builtin.systemd:
-    name: "{{ wordpress_php_fpm_service }}"
-    state: restarted
-  become: true
-
-- name: Reload nginx
-  ansible.builtin.systemd:
-    name: nginx
-    state: reloaded
-  become: true
-
-- name: Reload apache
-  ansible.builtin.systemd:
-    name: "{{ wordpress_apache_service }}"
-    state: reloaded
-  become: true
-
-- name: Restart apache
-  ansible.builtin.systemd:
-    name: "{{ wordpress_apache_service }}"
-    state: restarted
-  become: true
-
-- name: Restart redis
-  ansible.builtin.systemd:
-    name: redis
-    state: restarted
-  become: true
-
-- name: Restart fail2ban
-  ansible.builtin.systemd:
-    name: fail2ban
-    state: restarted
-  become: true
-
-- name: "Reload nginx"
-  ansible.builtin.systemd:
-    name: nginx
-    state: reloaded
-  become: true
-
-- name: "Reload apache"
-  ansible.builtin.systemd:
-    name: "{{ wordpress_apache_service }}"
-    state: reloaded
-  become: true
-
-- name: "Restart mysql"
-  ansible.builtin.systemd:
-    name: mysql
-    state: restarted
-  become: true
-
-- name: "Restart mariadb"
-  ansible.builtin.systemd:
-    name: mariadb
-    state: restarted
-  become: true
-
-- name: "Restart php8.1-fpm"
-  ansible.builtin.systemd:
-    name: php8.1-fpm
-    state: restarted
-    daemon_reload: true
-  become: true
-
-- name: "Restart php8.2-fpm"
-  ansible.builtin.systemd:
-    name: php8.2-fpm
-    state: restarted
-    daemon_reload: true
-  become: true
-
-- name: restart php-fpm
-  ansible.builtin.systemd:
-    name: "{{ wordpress_php_fpm_service }}"
-    state: restarted
-    daemon_reload: true
-  become: true
-
-# Security-related handlers
 - name: reload apparmor
   ansible.builtin.systemd:
     name: apparmor
@@ -171,6 +110,7 @@
   become: true
   when: ansible_os_family == "RedHat"
 
+# System Handlers
 - name: reboot system
   ansible.builtin.reboot:
     reboot_timeout: 600

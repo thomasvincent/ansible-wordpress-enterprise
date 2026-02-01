@@ -69,28 +69,28 @@
 
   tasks:
     - name: Test external service connectivity
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ wordpress_db_host }}"
         port: "{{ wordpress_db_port }}"
         timeout: 30
 
     - name: Include prerequisites only
-      include_tasks: tasks/prerequisites.yml
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
 
     - name: Include PHP installation
-      include_tasks: tasks/php.yml
+      ansible.builtin.include_tasks: tasks/php.yml
 
     - name: Include web server installation
-      include_tasks: tasks/webserver_nginx.yml
+      ansible.builtin.include_tasks: tasks/webserver_nginx.yml
 
     - name: Include WordPress installation
-      include_tasks: tasks/wordpress_install.yml
+      ansible.builtin.include_tasks: tasks/wordpress_install.yml
 
     - name: Include WordPress configuration
-      include_tasks: tasks/wordpress_configure.yml
+      ansible.builtin.include_tasks: tasks/wordpress_configure.yml
 
     - name: Display installation info
-      debug:
+      ansible.builtin.debug:
         msg:
           - "WordPress installation test completed!"
           - "Site URL: {{ wordpress_site_url }}"
