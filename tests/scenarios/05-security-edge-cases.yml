@@ -128,7 +128,7 @@
         - name: Create test user with limited privileges
           ansible.builtin.user:
             name: testuser
-            shell: /bin/bash
+            ansible.builtin.shell: /bin/bash
             create_home: true
 
         - name: Test security status script as non-root user
