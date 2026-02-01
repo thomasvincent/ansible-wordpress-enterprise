@@ -15,10 +15,10 @@
 
   tasks:
     - name: Install Prerequisites
-      include_tasks: tasks/prerequisites.yml
+      ansible.builtin.include_tasks: tasks/prerequisites.yml
 
     - name: Install PHP packages
-      apt:
+      ansible.builtin.apt:
         name:
           - "php{{ wordpress_php_version }}"
           - "php{{ wordpress_php_version }}-fpm"
@@ -37,25 +37,25 @@
         update_cache: true
 
     - name: Enable and start PHP-FPM service
-      systemd:
+      ansible.builtin.systemd:
         name: "php{{ wordpress_php_version }}-fpm"
         enabled: true
         state: started
         daemon_reload: true
 
     - name: Verify PHP installation
-      command: "php{{ wordpress_php_version }} --version"
+      ansible.builtin.command: "php{{ wordpress_php_version }} --version"
       register: php_version
       changed_when: false
 
     - name: Check PHP-FPM service status
-      systemd:
+      ansible.builtin.systemd:
         name: "php{{ wordpress_php_version }}-fpm"
         state: started
       register: php_fmp_status
 
     - name: Display test results
-      debug:
+      ansible.builtin.debug:
         msg:
           - "✅ PHP {{ wordpress_php_version }} installation completed!"
           - "✅ PHP version: {{ php_version.stdout.split('\\n')[0] }}"

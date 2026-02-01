@@ -58,14 +58,14 @@
 
   tasks:
     - name: Test database connectivity
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ wordpress_db_host }}"
         port: "{{ wordpress_db_port }}"
         timeout: 30
       when: wordpress_use_external_db | default(false) | bool
 
     - name: Test Redis connectivity
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ wordpress_redis_host }}"
         port: "{{ wordpress_redis_port }}"
         timeout: 30
@@ -77,7 +77,7 @@
 
   post_tasks:
     - name: Display WordPress site information
-      debug:
+      ansible.builtin.debug:
         msg:
           - "WordPress installation completed!"
           - "Site URL: {{ wordpress_site_url }}"

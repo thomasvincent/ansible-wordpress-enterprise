@@ -193,6 +193,10 @@
   become: true
 
 - name: Create custom SELinux policy for WordPress (if needed)
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_custom_policy | default(false)
   block:
     - name: Create custom SELinux policy directory
       ansible.builtin.file:
@@ -239,12 +243,12 @@
       when: selinux_policy_file.changed
       become: true
       changed_when: true
+
+- name: Set up SELinux logging and monitoring
   when:
     - ansible_os_family == "RedHat"
     - selinux_enabled | default(false)
-    - wordpress_selinux_custom_policy | default(false)
-
-- name: Set up SELinux logging and monitoring
+    - wordpress_selinux_audit | default(true)
   block:
     - name: Install audit daemon
       ansible.builtin.package:
@@ -273,10 +277,6 @@
         enabled: true
         state: started
       become: true
-  when:
-    - ansible_os_family == "RedHat"
-    - selinux_enabled | default(false)
-    - wordpress_selinux_audit | default(true)
 
 - name: Generate SELinux troubleshooting script
   ansible.builtin.template:
@@ -312,6 +312,10 @@
   become: true
 
 - name: Validate SELinux configuration
+  when:
+    - ansible_os_family == "RedHat"
+    - selinux_enabled | default(false)
+    - wordpress_selinux_validate | default(true)
   block:
     - name: Check SELinux contexts are applied correctly
       ansible.builtin.command: ls -laZ {{ wordpress_path }}
@@ -332,7 +336,3 @@
         msg: |
           SELinux contexts: {{ selinux_contexts.stdout_lines[:5] }}
           SELinux booleans: {{ selinux_booleans.results | map(attribute='stdout') | list }}
-  when:
-    - ansible_os_family == "RedHat"
-    - selinux_enabled | default(false)
-    - wordpress_selinux_validate | default(true)

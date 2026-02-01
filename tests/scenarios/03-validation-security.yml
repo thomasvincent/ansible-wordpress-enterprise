@@ -85,7 +85,7 @@
 
   pre_tasks:
     - name: Test input validation functionality
-      include_tasks: ../tasks/validate.yml
+      ansible.builtin.include_tasks: ../tasks/validate.yml
       tags: validation
 
   roles:
@@ -93,7 +93,7 @@
 
   post_tasks:
     - name: Wait for HTTPS services to be ready
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ wordpress_https_port }}"
         host: "{{ ansible_default_ipv4.address }}"
         delay: 20
@@ -147,7 +147,7 @@
       ignore_errors: true
 
     - name: Verify SSL certificate (self-signed)
-      command: >
+      ansible.builtin.command: >
         openssl s_client -connect {{ ansible_default_ipv4.address }}:443
         -servername {{ ansible_default_ipv4.address }} -verify_return_error
       delegate_to: localhost
@@ -156,12 +156,12 @@
       changed_when: false
 
     - name: Check file permissions security
-      stat:
+      ansible.builtin.stat:
         path: "{{ wordpress_install_dir }}/wp-config.php"
       register: wpconfig_perms
 
     - name: Display security test results
-      debug:
+      ansible.builtin.debug:
         msg:
           - "🔒 Security and Validation test completed"
           - "🔒 HTTPS accessible: {{ 'Yes' if https_response.status == 200 else 'Redirect' }}"
