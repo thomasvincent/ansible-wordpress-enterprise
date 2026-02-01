@@ -109,14 +109,24 @@
     - name: Edge Case 4 - Test platform security when not available
       block:
         - name: Test SELinux tasks on non-SELinux system
-          ansible.builtin.include_tasks: ../../tasks/selinux.yml
           when: ansible_os_family != "RedHat"
-          failed_when: false
+          block:
+            - name: Include SELinux tasks
+              ansible.builtin.include_tasks: ../../tasks/selinux.yml
+          rescue:
+            - name: SELinux tasks failed expectedly
+              ansible.builtin.debug:
+                msg: "SELinux tasks failed on non-RedHat system as expected"
 
         - name: Test AppArmor tasks on non-AppArmor system
-          ansible.builtin.include_tasks: ../../tasks/apparmor.yml
           when: ansible_os_family != "Debian"
-          failed_when: false
+          block:
+            - name: Include AppArmor tasks
+              ansible.builtin.include_tasks: ../../tasks/apparmor.yml
+          rescue:
+            - name: AppArmor tasks failed expectedly
+              ansible.builtin.debug:
+                msg: "AppArmor tasks failed on non-Debian system as expected"
 
         - name: Verify platform detection works correctly
           ansible.builtin.debug:

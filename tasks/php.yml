@@ -257,8 +257,8 @@
   become: true
 
 - name: Verify PHP-FPM is running
-  ansible.builtin.command:
-    cmd: "systemctl is-active {{ wordpress_php_fpm_service }}"
+  ansible.builtin.systemd:
+    name: "{{ wordpress_php_fpm_service }}"
   register: php_fpm_status
   changed_when: false
   failed_when: false
