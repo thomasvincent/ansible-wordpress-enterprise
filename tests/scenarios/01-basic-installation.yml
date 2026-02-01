@@ -94,7 +94,7 @@
 
   post_tasks:
     - name: Wait for services to be ready
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ wordpress_http_port }}"
         host: "{{ ansible_default_ipv4.address }}"
         delay: 10
@@ -110,7 +110,7 @@
       register: wp_response
 
     - name: Display test results
-      debug:
+      ansible.builtin.debug:
         msg:
           - "✅ WordPress installation test completed"
           - "✅ Site accessible at: http://{{ ansible_default_ipv4.address }}"
