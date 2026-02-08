@@ -89,7 +89,7 @@
       tags: validation
 
   roles:
-    - role: ../../
+    - role: ansible-wordpress-enterprise
       become: true
 
   post_tasks:
@@ -102,7 +102,7 @@
       delegate_to: localhost
 
     - name: Test HTTPS redirect
-      uri:
+      ansible.builtin.uri:
         url: "http://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -111,7 +111,7 @@
       register: http_response
 
     - name: Test HTTPS access (with self-signed cert)
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -120,7 +120,7 @@
       register: https_response
 
     - name: Check PHP security headers
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ ansible_default_ipv4.address }}"
         method: GET
         validate_certs: false
@@ -129,7 +129,7 @@
       register: security_headers
 
     - name: Test admin area security
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ ansible_default_ipv4.address }}/wp-admin/"
         method: GET
         status_code: [200, 301, 302]
@@ -138,7 +138,7 @@
       register: admin_security
 
     - name: Check for security plugin installation
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ ansible_default_ipv4.address }}/wp-admin/admin.php?page=WFLS"
         method: GET
         status_code: [200, 301, 302, 404]  # 404 is OK if redirect

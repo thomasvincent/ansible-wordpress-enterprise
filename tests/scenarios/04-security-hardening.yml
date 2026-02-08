@@ -77,7 +77,7 @@
           Cache Type: {{ wordpress_cache_type }}
 
   roles:
-    - role: ../../
+    - role: ansible-wordpress-enterprise
       become: true
       tags: ['wordpress', 'security']
 
@@ -280,7 +280,11 @@
     - name: Test - Verify AppArmor profiles are in correct mode
       block:
         - name: Check AppArmor profile modes
-          ansible.builtin.shell: aa-status | grep -E "(wordpress|php|nginx|apache)" | head -10
+          ansible.builtin.shell: |
+            set -o pipefail
+            aa-status | grep -E "(wordpress|php|nginx|apache)" | head -10
+          args:
+            executable: /bin/bash
           register: apparmor_profile_modes
           changed_when: false
 
@@ -429,6 +433,7 @@
         - name: Check security maintenance cron job
           ansible.builtin.command: crontab -l
           register: cron_jobs
+          become: true
           become_user: root
           changed_when: false
 

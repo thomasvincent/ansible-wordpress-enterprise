@@ -146,14 +146,16 @@
         - name: Create test user with limited privileges
           ansible.builtin.user:
             name: testuser
-            ansible.builtin.shell: /bin/bash
+            shell: /bin/bash
             create_home: true
 
         - name: Test security status script as non-root user
           ansible.builtin.command: /usr/local/bin/wordpress-security-status
+          become: true
           become_user: testuser
           register: limited_user_test
           failed_when: false
+          changed_when: false
 
         - name: Verify security script handles limited privileges
           ansible.builtin.assert:
@@ -185,6 +187,7 @@
           ansible.builtin.command: checkmodule -M -m -o /tmp/test-corrupted-policy.mod /tmp/test-corrupted-policy.te
           register: corrupted_policy_test
           failed_when: false
+          changed_when: false
           when: ansible_os_family == "RedHat"
 
         - name: Verify corrupted policy is rejected
@@ -211,6 +214,7 @@
           ansible.builtin.command: apparmor_parser -T /tmp/test-corrupted-apparmor
           register: corrupted_apparmor_test
           failed_when: false
+          changed_when: false
           when: ansible_os_family == "Debian"
 
         - name: Verify corrupted AppArmor profile is rejected
@@ -236,15 +240,18 @@
         - name: Check available disk space
           ansible.builtin.command: df -h /tmp
           register: disk_space_check
+          changed_when: false
 
         - name: Check available memory
           ansible.builtin.command: free -m
           register: memory_check
+          changed_when: false
 
         - name: Create large test file to consume space
           ansible.builtin.command: dd if=/dev/zero of=/tmp/large-test-file bs=1M count=100
           register: large_file_creation
           failed_when: false
+          changed_when: large_file_creation.rc == 0
 
         - name: Test security operations with reduced available space
           block:
@@ -285,6 +292,7 @@
           ansible.builtin.command: fail2ban-client -t
           register: fail2ban_test_config
           failed_when: false
+          changed_when: false
 
         - name: Cleanup test fail2ban config
           ansible.builtin.file:
@@ -302,6 +310,7 @@
             wait
           register: concurrent_test
           failed_when: false
+          changed_when: false
 
         - name: Verify concurrent execution handling
           ansible.builtin.assert:
@@ -316,11 +325,13 @@
         - name: Save current SELinux booleans (RHEL/CentOS)
           ansible.builtin.command: getsebool -a
           register: current_selinux_booleans
+          changed_when: false
           when: ansible_os_family == "RedHat"
 
         - name: Save current AppArmor profiles (Ubuntu/Debian)
           ansible.builtin.command: aa-status
           register: current_apparmor_profiles
+          changed_when: false
           when: ansible_os_family == "Debian"
 
         - name: Simulate configuration changes
@@ -343,6 +354,7 @@
         - name: Test security operations on unusual paths
           ansible.builtin.command: ls -la "/tmp/test wordpress-#$%&"
           register: special_char_test
+          changed_when: false
 
         - name: Cleanup special character directory
           ansible.builtin.file:
@@ -380,6 +392,7 @@
             mkdir -p /tmp/security-backup
             cp /etc/audit/rules.d/wordpress.rules /tmp/security-backup/ 2>/dev/null || true
             cp /etc/fail2ban/jail.d/wordpress.conf /tmp/security-backup/ 2>/dev/null || true
+          changed_when: false
 
         - name: Test configuration rollback capability
           ansible.builtin.debug:
