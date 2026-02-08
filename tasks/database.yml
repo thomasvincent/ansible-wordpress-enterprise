@@ -1,16 +1,30 @@
 ---
 # Database Configuration Tasks
 
-- name: Set DEBIAN_FRONTEND for non-interactive installation
-  ansible.builtin.set_fact:
-    debian_frontend_env: "{{ {'DEBIAN_FRONTEND': 'noninteractive'} if ansible_os_family == 'Debian' else {} }}"
+- name: Preconfigure MySQL/MariaDB for non-interactive installation (Debian/Ubuntu)
+  ansible.builtin.debconf:
+    name: "{{ 'mysql-server' if wordpress_db_engine == 'mysql' else 'mariadb-server' }}"
+    question: "{{ item.question }}"
+    value: "{{ item.value }}"
+    vtype: "{{ item.vtype }}"
+  loop:
+    - { question: "mysql-server/root_password", value: "", vtype: "password" }
+    - { question: "mysql-server/root_password_again", value: "", vtype: "password" }
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - not wordpress_use_external_db | bool
+  failed_when: false
+  no_log: true
 
 - name: Install MySQL/MariaDB server packages
   ansible.builtin.package:
     name: "{{ wordpress_db_packages[wordpress_db_engine] }}"
     state: present
     update_cache: "{{ wordpress_update_cache | bool }}"
-  environment: "{{ debian_frontend_env }}"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    DEBCONF_NONINTERACTIVE_SEEN: "true"
   become: true
   when: not wordpress_use_external_db | bool
   notify: "Restart {{ wordpress_db_engine }}"

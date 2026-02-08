@@ -22,6 +22,7 @@
 - name: Install basic packages (Debian/Ubuntu)
   ansible.builtin.apt:
     name:
+      - apt-utils
       - curl
       - wget
       - unzip
@@ -31,6 +32,8 @@
       - gnupg
       - lsb-release
     state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
   when: ansible_os_family == "Debian"
 
 - name: Remove curl-minimal to avoid conflicts (RedHat/CentOS)
