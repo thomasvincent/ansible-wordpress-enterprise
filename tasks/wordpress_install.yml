@@ -6,7 +6,7 @@
     name: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
     system: true
-    ansible.builtin.shell: /bin/bash
+    shell: /bin/bash
     home: "{{ wordpress_install_dir }}"
     create_home: false
     state: present

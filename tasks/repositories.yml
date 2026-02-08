@@ -117,7 +117,9 @@
   ansible.builtin.yum_repository:
     name: nginx
     description: nginx repo
-    baseurl: "http://nginx.org/packages/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/{{ ansible_distribution_major_version }}/$basearch/"
+    baseurl: >-
+      http://nginx.org/packages/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/
+      {{ ansible_distribution_major_version }}/$basearch/
     gpgkey: https://nginx.org/keys/nginx_signing.key
     gpgcheck: true
     enabled: true
@@ -141,7 +143,9 @@
 
 - name: Add MariaDB repository (Debian/Ubuntu)
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64,arm64,ppc64el] http://mirror.mariadb.org/repo/{{ wordpress_mariadb_version | default('10.11') }}/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+    repo: >-
+      deb [arch=amd64,arm64,ppc64el] http://mirror.mariadb.org/repo/{{ wordpress_mariadb_version | default('10.11') }}/
+      {{ ansible_distribution | lower }} {{ ansible_distribution_release }} main
     state: present
     filename: mariadb
     update_cache: true
@@ -155,7 +159,9 @@
   ansible.builtin.yum_repository:
     name: mariadb
     description: MariaDB
-    baseurl: "http://mirror.mariadb.org/yum/{{ wordpress_mariadb_version | default('10.11') }}/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}{{ ansible_distribution_major_version }}-amd64"
+    baseurl: >-
+      http://mirror.mariadb.org/yum/{{ wordpress_mariadb_version | default('10.11') }}/
+      {{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}{{ ansible_distribution_major_version }}-amd64
     gpgkey: https://mirror.mariadb.org/yum/RPM-GPG-KEY-MariaDB
     gpgcheck: true
     enabled: true
@@ -177,7 +183,9 @@
 
 - name: Add NodeSource repository (Debian/Ubuntu)
   ansible.builtin.apt_repository:
-    repo: "deb https://deb.nodesource.com/node_{{ wordpress_nodejs_version | default('18') }}.x {{ ansible_distribution_release }} main"
+    repo: >-
+      deb https://deb.nodesource.com/node_{{ wordpress_nodejs_version | default('18') }}.x
+      {{ ansible_distribution_release }} main
     state: present
     filename: nodesource
     update_cache: true
@@ -190,7 +198,9 @@
   ansible.builtin.yum_repository:
     name: nodesource
     description: Node.js Packages for Enterprise Linux
-    baseurl: "https://rpm.nodesource.com/pub_{{ wordpress_nodejs_version | default('18') }}.x/el/{{ ansible_distribution_major_version }}/$basearch"
+    baseurl: >-
+      https://rpm.nodesource.com/pub_{{ wordpress_nodejs_version | default('18') }}.x/el/
+      {{ ansible_distribution_major_version }}/$basearch
     gpgkey: https://rpm.nodesource.com/pub/el/NODESOURCE-GPG-SIGNING-KEY-EL
     gpgcheck: true
     enabled: true
@@ -211,7 +221,9 @@
 
 - name: Add Docker repository (Debian/Ubuntu)
   ansible.builtin.apt_repository:
-    repo: "deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+    repo: >-
+      deb https://download.docker.com/linux/{{ ansible_distribution | lower }}
+      {{ ansible_distribution_release }} stable
     state: present
     filename: docker
     update_cache: true
@@ -224,7 +236,9 @@
   ansible.builtin.yum_repository:
     name: docker-ce-stable
     description: Docker CE Stable - $basearch
-    baseurl: "https://download.docker.com/linux/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/$releasever/$basearch/stable"
+    baseurl: >-
+      https://download.docker.com/linux/{{ (ansible_distribution == 'CentOS') | ternary('centos', 'rhel') }}/
+      $releasever/$basearch/stable
     gpgkey: https://download.docker.com/linux/centos/gpg
     gpgcheck: true
     enabled: true

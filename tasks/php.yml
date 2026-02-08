@@ -220,8 +220,10 @@
     line: "{{ item.key }} = {{ item.value }}"
     state: present
   loop:
-    - { key: 'session.save_handler', value: 'redis' }
-    - { key: 'session.save_path', value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"' }
+    - key: 'session.save_handler'
+      value: 'redis'
+    - key: 'session.save_path'
+      value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"'
   become: true
   notify: restart php-fpm
   when:

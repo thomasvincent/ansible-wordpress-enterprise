@@ -34,7 +34,10 @@
     - name: Set test facts
       ansible.builtin.set_fact:
         test_start_time: "{{ ansible_date_time.epoch }}"
-        os_security_system: "{{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None' }}"
+        os_security_system: >-
+          {{ 'SELinux' if ansible_os_family == 'RedHat'
+          else 'AppArmor' if ansible_os_family == 'Debian'
+          else 'None' }}
 
     - name: Display edge case test information
       ansible.builtin.debug:
@@ -67,10 +70,15 @@
             temp_wp_path: "/nonexistent/wordpress/path"
 
         - name: Test security tasks with missing directory
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_path: "{{ temp_wp_path }}"
-          failed_when: false
+          block:
+            - name: Include security hardening
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_path: "{{ temp_wp_path }}"
+          rescue:
+            - name: Handle expected failure
+              ansible.builtin.debug:
+                msg: "Security hardening failed as expected with missing directory"
 
         - name: Verify graceful handling of missing directories
           ansible.builtin.debug:
@@ -239,10 +247,15 @@
           failed_when: false
 
         - name: Test security operations with reduced available space
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_security_status_script: false  # Skip to save space
-          failed_when: false
+          block:
+            - name: Include security hardening with reduced space
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_security_status_script: false  # Skip to save space
+          rescue:
+            - name: Handle expected failure with reduced space
+              ansible.builtin.debug:
+                msg: "Security operations handled reduced space scenario"
 
         - name: Cleanup large test file
           ansible.builtin.file:
@@ -355,7 +368,9 @@
 
         - name: Verify service dependency handling
           ansible.builtin.debug:
-            msg: "Service dependency checks completed: {{ service_dependency_check.results | map(attribute='status') | map(attribute='ActiveState') | list }}"
+            msg: >-
+              Service dependency checks completed:
+              {{ service_dependency_check.results | map(attribute='status') | map(attribute='ActiveState') | list }}
 
     # Edge Case 13: Test rollback scenarios
     - name: Edge Case 13 - Test security configuration rollback
@@ -390,10 +405,15 @@
             - /tmp/wordpress2/wp-content/uploads
 
         - name: Test security hardening on multiple installations
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_path: /tmp/wordpress2
-          failed_when: false
+          block:
+            - name: Include security hardening for second installation
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_path: /tmp/wordpress2
+          rescue:
+            - name: Handle expected failure for second installation
+              ansible.builtin.debug:
+                msg: "Multi-installation security test completed"
 
         - name: Cleanup second WordPress directory
           ansible.builtin.file:

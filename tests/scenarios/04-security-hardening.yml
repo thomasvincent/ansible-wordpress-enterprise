@@ -61,7 +61,10 @@
     - name: Set test facts
       ansible.builtin.set_fact:
         test_start_time: "{{ ansible_date_time.epoch }}"
-        expected_security_system: "{{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None' }}"
+        expected_security_system: >-
+          {{ 'SELinux' if ansible_os_family == 'RedHat'
+          else 'AppArmor' if ansible_os_family == 'Debian'
+          else 'None' }}
 
     - name: Display test information
       ansible.builtin.debug:
@@ -74,7 +77,8 @@
           Cache Type: {{ wordpress_cache_type }}
 
   roles:
-    - role: ansible-wordpress-enterprise
+    - role: ../../
+      become: true
       tags: ['wordpress', 'security']
 
   post_tasks:
