@@ -29,13 +29,22 @@
   when: not wordpress_use_external_db | bool
   notify: "Restart {{ wordpress_db_engine }}"
 
+- name: Check if systemd is available
+  ansible.builtin.stat:
+    path: /run/systemd/system
+  register: systemd_available
+  when: not wordpress_use_external_db | bool
+
 - name: Ensure database service is started and enabled
   ansible.builtin.service:
     name: "{{ wordpress_db_service[wordpress_db_engine] }}"
     state: started
     enabled: true
   become: true
-  when: not wordpress_use_external_db | bool
+  when:
+    - not wordpress_use_external_db | bool
+    - systemd_available.stat.exists | default(false)
+  failed_when: false
 
 - name: Set MySQL/MariaDB root password (first time)
   community.mysql.mysql_user:
@@ -126,11 +135,24 @@
   become: true
   no_log: true
 
+- name: Create MariaDB configuration directory (Debian/Ubuntu)
+  ansible.builtin.file:
+    path: "{{ '/etc/mysql/mariadb.conf.d' if wordpress_db_engine == 'mariadb' else '/etc/mysql/mysql.conf.d' }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - not wordpress_use_external_db | bool
+
 - name: Configure MySQL/MariaDB for WordPress
   ansible.builtin.template:
     src: mysql-wordpress.cnf.j2
     dest: >-
-      {{ '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian'
+      {{ '/etc/mysql/mariadb.conf.d/wordpress.cnf' if (ansible_os_family == 'Debian' and wordpress_db_engine == 'mariadb')
+         else '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian'
          else '/etc/my.cnf.d/wordpress.cnf' }}
     owner: root
     group: root
@@ -146,7 +168,8 @@
       {{ 'mysql-optimization.cnf.j2' if wordpress_db_engine == 'mysql'
          else 'mariadb-optimization.cnf.j2' }}
     dest: >-
-      {{ '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian'
+      {{ '/etc/mysql/mariadb.conf.d/optimization.cnf' if (ansible_os_family == 'Debian' and wordpress_db_engine == 'mariadb')
+         else '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian'
          else '/etc/my.cnf.d/optimization.cnf' }}
     owner: root
     group: root
