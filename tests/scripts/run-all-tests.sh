@@ -174,18 +174,26 @@ build_images() {
         print_warning "Skipping Docker image build"
         return
     fi
-    
+
     print_header "Building Docker Images"
-    
+
     print_status "Building test environment images..."
     cd "$PROJECT_DIR"
-    
+
+    local build_result=0
     if [[ "$VERBOSE" == "true" ]]; then
         $DOCKER_COMPOSE -f "$COMPOSE_FILE" build --no-cache
+        build_result=$?
     else
         $DOCKER_COMPOSE -f "$COMPOSE_FILE" build --no-cache >/dev/null 2>&1
+        build_result=$?
     fi
-    
+
+    if [[ $build_result -ne 0 ]]; then
+        print_error "Docker image build failed with exit code $build_result"
+        exit 1
+    fi
+
     print_success "Docker images built successfully"
 }
 
