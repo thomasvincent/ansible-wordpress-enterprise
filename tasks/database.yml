@@ -173,8 +173,11 @@
   ansible.builtin.template:
     src: mysql-wordpress.cnf.j2
     dest: >-
-      {{ '/etc/mysql/mariadb.conf.d/wordpress.cnf' if (ansible_os_family == 'Debian' and wordpress_db_engine == 'mariadb')
-         else '/etc/mysql/mysql.conf.d/wordpress.cnf' if ansible_os_family == 'Debian'
+      {{ '/etc/mysql/mariadb.conf.d/wordpress.cnf'
+         if (ansible_os_family == 'Debian' and
+         wordpress_db_engine == 'mariadb')
+         else '/etc/mysql/mysql.conf.d/wordpress.cnf'
+         if ansible_os_family == 'Debian'
          else '/etc/my.cnf.d/wordpress.cnf' }}
     owner: root
     group: root
@@ -187,11 +190,15 @@
 - name: Optimize MySQL/MariaDB configuration
   ansible.builtin.template:
     src: >-
-      {{ 'mysql-optimization.cnf.j2' if wordpress_db_engine == 'mysql'
+      {{ 'mysql-optimization.cnf.j2'
+         if wordpress_db_engine == 'mysql'
          else 'mariadb-optimization.cnf.j2' }}
     dest: >-
-      {{ '/etc/mysql/mariadb.conf.d/optimization.cnf' if (ansible_os_family == 'Debian' and wordpress_db_engine == 'mariadb')
-         else '/etc/mysql/mysql.conf.d/optimization.cnf' if ansible_os_family == 'Debian'
+      {{ '/etc/mysql/mariadb.conf.d/optimization.cnf'
+         if (ansible_os_family == 'Debian' and
+         wordpress_db_engine == 'mariadb')
+         else '/etc/mysql/mysql.conf.d/optimization.cnf'
+         if ansible_os_family == 'Debian'
          else '/etc/my.cnf.d/optimization.cnf' }}
     owner: root
     group: root
