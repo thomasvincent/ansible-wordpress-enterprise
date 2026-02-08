@@ -77,7 +77,7 @@
           Cache Type: {{ wordpress_cache_type }}
 
   roles:
-    - role: ansible-wordpress-enterprise
+    - role: ../../
       become: true
       tags: ['wordpress', 'security']
 
