@@ -89,7 +89,7 @@
       tags: validation
 
   roles:
-    - role: ansible-wordpress-enterprise
+    - role: ../../
       become: true
 
   post_tasks:

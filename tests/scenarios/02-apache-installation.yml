@@ -110,7 +110,7 @@
       CONCATENATE_SCRIPTS: false
 
   roles:
-    - role: ansible-wordpress-enterprise
+    - role: ../../
       become: true
 
   post_tasks:
