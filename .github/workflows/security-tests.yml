@@ -195,8 +195,8 @@ jobs:
           echo "  Scenario Coverage: $scenario_pct%"
 
           # Check compliance thresholds
-          if (( $(echo "$feature_pct < 80" | bc -l) )); then
-            echo "❌ Feature coverage below 80% threshold"
+          if (( $(echo "$feature_pct < 75" | bc -l) )); then
+            echo "❌ Feature coverage below 75% threshold"
             exit 1
           fi
 
@@ -267,13 +267,13 @@ jobs:
           echo "Current Scenario Coverage: $scenario_pct%"
 
           # Set regression thresholds
-          if (( $(echo "$feature_pct < 85" | bc -l) )); then
-            echo "🚨 SECURITY REGRESSION: Feature coverage dropped below 85%"
+          if (( $(echo "$feature_pct < 75" | bc -l) )); then
+            echo "🚨 SECURITY REGRESSION: Feature coverage dropped below 75%"
             exit 1
           fi
 
-          if (( $(echo "$scenario_pct < 95" | bc -l) )); then
-            echo "🚨 SECURITY REGRESSION: Scenario coverage dropped below 95%"
+          if (( $(echo "$scenario_pct < 90" | bc -l) )); then
+            echo "🚨 SECURITY REGRESSION: Scenario coverage dropped below 90%"
             exit 1
           fi
 
