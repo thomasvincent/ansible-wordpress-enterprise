@@ -33,6 +33,13 @@
     state: present
   when: ansible_os_family == "Debian"
 
+- name: Remove curl-minimal to avoid conflicts (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name: curl-minimal
+    state: absent
+  when: ansible_os_family == "RedHat"
+  failed_when: false
+
 - name: Install basic packages (RedHat/CentOS)
   ansible.builtin.dnf:
     name:
@@ -43,6 +50,7 @@
       - ca-certificates
       - gnupg2
     state: present
+    allowerasing: true
   when: ansible_os_family == "RedHat"
 
 - name: Create WordPress system user
