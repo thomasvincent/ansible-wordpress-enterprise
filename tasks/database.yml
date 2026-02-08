@@ -45,6 +45,18 @@
     - not wordpress_use_external_db | bool
     - systemd_available.stat.exists | default(false)
   failed_when: false
+  register: database_service_started
+
+- name: Check if database socket exists
+  ansible.builtin.stat:
+    path: "{{ '/var/run/mysqld/mysqld.sock' if ansible_os_family == 'Debian' else '/var/lib/mysql/mysql.sock' }}"
+  register: database_socket_check
+  when: not wordpress_use_external_db | bool
+
+- name: Set fact for database availability
+  ansible.builtin.set_fact:
+    wordpress_db_available: "{{ database_socket_check.stat.exists | default(false) }}"
+  when: not wordpress_use_external_db | bool
 
 - name: Set MySQL/MariaDB root password (first time)
   community.mysql.mysql_user:
@@ -58,6 +70,7 @@
   when:
     - not wordpress_use_external_db | bool
     - wordpress_db_root_password is defined
+    - wordpress_db_available | default(false)
   register: mysql_root_password_set
   failed_when: false
   no_log: true
@@ -70,7 +83,9 @@
     group: root
     mode: '0600'
   become: true
-  when: not wordpress_use_external_db | bool
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_db_available | default(false)
 
 - name: Remove anonymous MySQL users
   community.mysql.mysql_user:
@@ -80,7 +95,9 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
-  when: not wordpress_use_external_db | bool
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_db_available | default(false)
   no_log: true
 
 - name: Remove MySQL test database
@@ -90,7 +107,9 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
-  when: not wordpress_use_external_db | bool
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_db_available | default(false)
   no_log: true
 
 - name: Remove remote root user access
@@ -108,6 +127,7 @@
     - "localhost.localdomain"
   when:
     - not wordpress_use_external_db | bool
+    - wordpress_db_available | default(false)
     - item != "localhost"
   failed_when: false
   no_log: true
@@ -121,6 +141,7 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
+  when: wordpress_db_available | default(false)
   no_log: true
 
 - name: Create WordPress database user
@@ -133,6 +154,7 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
+  when: wordpress_db_available | default(false)
   no_log: true
 
 - name: Create MariaDB configuration directory (Debian/Ubuntu)
@@ -228,7 +250,9 @@
     login_user: root
     login_password: "{{ wordpress_db_root_password }}"
   become: true
-  when: not wordpress_use_external_db | bool
+  when:
+    - not wordpress_use_external_db | bool
+    - wordpress_db_available | default(false)
   no_log: true
 
 - name: Test database connection
@@ -241,12 +265,15 @@
     login_db: "{{ wordpress_db_name }}"
   register: db_connection_test
   changed_when: false
+  when: wordpress_db_available | default(false)
   no_log: true
 
 - name: Display database connection status
   ansible.builtin.debug:
     msg: "Database connection successful"
-  when: db_connection_test is succeeded
+  when:
+    - db_connection_test is succeeded
+    - wordpress_db_available | default(false)
 
 - name: Enable slow query log
   community.mysql.mysql_query:
@@ -260,6 +287,7 @@
   when:
     - not wordpress_use_external_db | bool
     - wordpress_enable_logging | bool
+    - wordpress_db_available | default(false)
   no_log: true
 
 - name: Configure external database SSL (if enabled)
