@@ -9,7 +9,6 @@ skip_list:
   - no-handler  # Some tasks intentionally run when changed
   - syntax-check[unknown-module]  # Modules from collections
   - syntax-check[specific]  # Role path issues in test scenarios
-  - load-failure  # Test scenario files may be missing
 
 exclude_paths:
   - .github/
