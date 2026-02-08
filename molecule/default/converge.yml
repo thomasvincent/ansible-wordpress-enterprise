@@ -12,7 +12,7 @@
     wordpress_admin_password: "TestPass123!"
     
     # Database configuration
-    wordpress_db_engine: "mysql"
+    wordpress_db_engine: "mariadb"
     wordpress_db_name: "wordpress_test"
     wordpress_db_user: "wp_user"
     wordpress_db_password: "DbPass123!"
