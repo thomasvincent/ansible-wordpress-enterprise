@@ -7,8 +7,6 @@ skip_list:
   - key-order  # Cosmetic issue, not a bug
   - risky-file-permissions  # File permissions are managed elsewhere
   - no-handler  # Some tasks intentionally run when changed
-  - syntax-check[unknown-module]  # Modules from collections
-  - syntax-check[specific]  # Role path issues in test scenarios
 
 exclude_paths:
   - .github/
