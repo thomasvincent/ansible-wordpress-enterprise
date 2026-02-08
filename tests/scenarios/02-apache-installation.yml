@@ -110,7 +110,8 @@
       CONCATENATE_SCRIPTS: false
 
   roles:
-    - ansible-wordpress-enterprise
+    - role: ../../
+      become: true
 
   post_tasks:
     - name: Wait for Apache to be ready

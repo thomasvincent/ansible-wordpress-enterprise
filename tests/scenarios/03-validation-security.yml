@@ -89,7 +89,8 @@
       tags: validation
 
   roles:
-    - ansible-wordpress-enterprise
+    - role: ../../
+      become: true
 
   post_tasks:
     - name: Wait for HTTPS services to be ready
