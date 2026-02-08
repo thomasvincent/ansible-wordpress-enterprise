@@ -9,7 +9,9 @@
 
 - name: Download WP-CLI
   ansible.builtin.get_url:
-    url: "https://github.com/wp-cli/wp-cli/releases/download/v{{ wordpress_wpcli_version | default('2.10.0') }}/wp-cli-{{ wordpress_wpcli_version | default('2.10.0') }}.phar"
+    url: >-
+      https://github.com/wp-cli/wp-cli/releases/download/v{{ wordpress_wpcli_version | default('2.10.0') }}/
+      wp-cli-{{ wordpress_wpcli_version | default('2.10.0') }}.phar
     dest: /tmp/wp-cli.phar
     mode: '0755'
     timeout: 30

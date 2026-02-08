@@ -7,7 +7,11 @@
     msg: |
       Starting WordPress security hardening for {{ ansible_os_family }}
       Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
-      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None detected' }}
+      Security system: {{
+        'SELinux' if ansible_os_family == 'RedHat'
+        else 'AppArmor' if ansible_os_family == 'Debian'
+        else 'None detected'
+      }}
 
 # Configure SELinux for RedHat-based systems
 - name: Configure SELinux security policies
@@ -357,10 +361,16 @@
     msg: |
       WordPress Security Hardening Complete!
 
-      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'Basic hardening only' }}
+      Security system: {{
+        'SELinux' if ansible_os_family == 'RedHat'
+        else 'AppArmor' if ansible_os_family == 'Debian'
+        else 'Basic hardening only'
+      }}
       Fail2ban: {{ 'Configured' if wordpress_fail2ban_enabled | default(true) else 'Disabled' }}
       Auto updates: {{ 'Enabled' if wordpress_auto_security_updates | default(true) else 'Disabled' }}
-      Security tools: {{ 'Installed' if wordpress_install_security_tools | default(true) else 'Not installed' }}
+      Security tools: {{
+        'Installed' if wordpress_install_security_tools | default(true) else 'Not installed'
+      }}
 
       Security scripts available:
       - /usr/local/bin/wordpress-security-status
@@ -396,13 +406,19 @@
       register: security_services
       loop:
         - fail2ban
-        - "{{ 'auditd' if ansible_os_family == 'RedHat' else 'auditd' }}"
+        - auditd
       failed_when: false
 
     - name: Display security validation results
       ansible.builtin.debug:
         msg: |
           Security Validation Results:
-          wp-config.php permissions: {{ wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found' }}
-          uploads directory permissions: {{ wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found' }}
-          Security services status: {{ security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ') }}
+          wp-config.php permissions: {{
+            wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found'
+          }}
+          uploads directory permissions: {{
+            wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found'
+          }}
+          Security services status: {{
+            security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ')
+          }}
