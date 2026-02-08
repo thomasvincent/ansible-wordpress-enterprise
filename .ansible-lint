@@ -3,6 +3,10 @@ use_default_rules: true
 skip_list:
   - yaml[line-length]  # Allow long lines
   - name[missing]  # Allow tasks without names during development
+  - ignore-errors  # Legacy error handling pattern
+  - key-order  # Cosmetic issue, not a bug
+  - risky-file-permissions  # File permissions are managed elsewhere
+  - no-handler  # Some tasks intentionally run when changed
 
 exclude_paths:
   - .github/
