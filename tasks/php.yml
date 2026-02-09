@@ -99,6 +99,15 @@
   become: true
   failed_when: false
 
+- name: Ensure PHP-FPM pool.d directory exists
+  ansible.builtin.file:
+    path: "{{ wordpress_php_fpm_pool_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
 - name: Configure PHP-FPM pool
   ansible.builtin.template:
     src: php-fpm-pool.conf.j2
@@ -107,7 +116,7 @@
     group: root
     mode: '0644'
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP settings
   ansible.builtin.lineinfile:
@@ -123,7 +132,7 @@
     - { key: 'max_input_time', value: '{{ wordpress_php_max_input_time | default("600") }}' }
     - { key: 'max_input_vars', value: '{{ wordpress_php_max_input_vars | default("3000") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Install additional PHP extensions for WordPress
   ansible.builtin.apt:
@@ -170,7 +179,7 @@
     - { key: 'opcache.save_comments', value: '{{ wordpress_opcache_save_comments | default("1") }}' }
     - { key: 'opcache.enable_file_override', value: '{{ wordpress_opcache_enable_file_override | default("1") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when: wordpress_opcache_enable | default(true)
 
 - name: Configure PHP security settings
@@ -190,7 +199,7 @@
     - { key: 'session.cookie_secure', value: '{{ wordpress_php_session_cookie_secure | default("1") }}' }
     - { key: 'session.use_only_cookies', value: '{{ wordpress_php_session_use_only_cookies | default("1") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP performance settings
   ansible.builtin.lineinfile:
@@ -206,7 +215,7 @@
     - { key: 'auto_prepend_file', value: '{{ wordpress_php_auto_prepend_file | default("") }}' }
     - { key: 'auto_append_file', value: '{{ wordpress_php_auto_append_file | default("") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP-FPM pool advanced settings
   ansible.builtin.lineinfile:
@@ -225,7 +234,7 @@
     - { key: 'rlimit_files', value: '{{ wordpress_php_fpm_rlimit_files | default("65536") }}' }
     - { key: 'rlimit_core', value: '{{ wordpress_php_fpm_rlimit_core | default("0") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Enable PHP-FPM status page
   ansible.builtin.lineinfile:
@@ -235,7 +244,7 @@
     state: present
   become: true
   when: wordpress_php_fpm_status_page | default(false)
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Enable PHP-FPM ping page
   ansible.builtin.lineinfile:
@@ -245,7 +254,7 @@
     state: present
   become: true
   when: wordpress_php_fpm_ping_page | default(false)
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Create PHP error log file
   ansible.builtin.file:
@@ -269,7 +278,7 @@
     - { key: 'session.gc_divisor', value: '{{ wordpress_php_session_gc_divisor | default("1000") }}' }
     - { key: 'session.gc_maxlifetime', value: '{{ wordpress_php_session_gc_maxlifetime | default("1440") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when: wordpress_php_session_save_handler | default('files') == 'files'
 
 - name: Configure Redis session handling
@@ -284,7 +293,7 @@
     - key: 'session.save_path'
       value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"'
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when:
     - wordpress_php_session_save_handler | default('files') == 'redis'
     - wordpress_enable_redis | default(false)
