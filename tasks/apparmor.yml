@@ -12,7 +12,9 @@
 - name: Set AppArmor facts
   ansible.builtin.set_fact:
     apparmor_enabled: "{{ apparmor_status.rc == 0 }}"
-    apparmor_profiles_loaded: "{{ apparmor_status.stdout | regex_findall('profiles are loaded') | length > 0 if apparmor_status.rc == 0 else false }}"
+    apparmor_profiles_loaded: >-
+      {{ apparmor_status.stdout | regex_findall('profiles are loaded') | length > 0
+      if apparmor_status.rc == 0 else false }}
   when: ansible_os_family == "Debian"
 
 - name: Display AppArmor status

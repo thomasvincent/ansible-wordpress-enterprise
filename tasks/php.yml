@@ -1,4 +1,13 @@
 ---
+# Add ondrej/php PPA for Debian/Ubuntu (required for PHP 8.x)
+- name: Add ondrej/php PPA repository (Debian/Ubuntu)
+  ansible.builtin.apt_repository:
+    repo: "ppa:ondrej/php"
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+  become: true
+
 - name: Install PHP packages for Debian/Ubuntu
   ansible.builtin.apt:
     name:
@@ -9,7 +18,6 @@
       - "php{{ wordpress_php_version }}-gd"
       - "php{{ wordpress_php_version }}-mbstring"
       - "php{{ wordpress_php_version }}-xml"
-      - "php{{ wordpress_php_version }}-xmlrpc"
       - "php{{ wordpress_php_version }}-soap"
       - "php{{ wordpress_php_version }}-intl"
       - "php{{ wordpress_php_version }}-zip"
@@ -19,6 +27,49 @@
     update_cache: true
   when: ansible_os_family == "Debian"
   become: true
+
+# php-xmlrpc is a PECL extension on PHP 8.x, may not be available
+- name: Install php-xmlrpc (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: "php{{ wordpress_php_version }}-xmlrpc"
+    state: present
+  when: ansible_os_family == "Debian"
+  become: true
+  failed_when: false
+
+# Enable EPEL and Remi repos for PHP 8.x on RedHat
+- name: Install EPEL repository (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+  when: ansible_os_family == "RedHat"
+  become: true
+  failed_when: false
+
+- name: Install Remi repository (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name: "https://rpms.remirepo.net/enterprise/remi-release-{{ ansible_distribution_major_version }}.rpm"
+    state: present
+    disable_gpg_check: true
+  when: ansible_os_family == "RedHat"
+  become: true
+  failed_when: false
+
+- name: Reset PHP module stream (RedHat/CentOS)
+  ansible.builtin.command:
+    cmd: "dnf module reset php -y"
+  when: ansible_os_family == "RedHat"
+  become: true
+  changed_when: true
+  failed_when: false
+
+- name: Enable Remi PHP module (RedHat/CentOS)
+  ansible.builtin.command:
+    cmd: "dnf module enable php:remi-{{ wordpress_php_version }} -y"
+  when: ansible_os_family == "RedHat"
+  become: true
+  changed_when: true
+  failed_when: false
 
 - name: Install PHP packages for RedHat/CentOS
   ansible.builtin.dnf:
@@ -34,10 +85,27 @@
       - php-intl
       - php-zip
       - php-bcmath
-      - php-imagick
       - php-opcache
     state: present
   when: ansible_os_family == "RedHat"
+  become: true
+
+# php-pecl-imagick may not be available on all RHEL versions
+- name: Install php-pecl-imagick (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name: php-pecl-imagick
+    state: present
+  when: ansible_os_family == "RedHat"
+  become: true
+  failed_when: false
+
+- name: Ensure PHP-FPM pool.d directory exists
+  ansible.builtin.file:
+    path: "{{ wordpress_php_fpm_pool_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
   become: true
 
 - name: Configure PHP-FPM pool
@@ -48,7 +116,7 @@
     group: root
     mode: '0644'
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP settings
   ansible.builtin.lineinfile:
@@ -64,7 +132,7 @@
     - { key: 'max_input_time', value: '{{ wordpress_php_max_input_time | default("600") }}' }
     - { key: 'max_input_vars', value: '{{ wordpress_php_max_input_vars | default("3000") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Install additional PHP extensions for WordPress
   ansible.builtin.apt:
@@ -111,7 +179,7 @@
     - { key: 'opcache.save_comments', value: '{{ wordpress_opcache_save_comments | default("1") }}' }
     - { key: 'opcache.enable_file_override', value: '{{ wordpress_opcache_enable_file_override | default("1") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when: wordpress_opcache_enable | default(true)
 
 - name: Configure PHP security settings
@@ -131,7 +199,7 @@
     - { key: 'session.cookie_secure', value: '{{ wordpress_php_session_cookie_secure | default("1") }}' }
     - { key: 'session.use_only_cookies', value: '{{ wordpress_php_session_use_only_cookies | default("1") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP performance settings
   ansible.builtin.lineinfile:
@@ -147,7 +215,7 @@
     - { key: 'auto_prepend_file', value: '{{ wordpress_php_auto_prepend_file | default("") }}' }
     - { key: 'auto_append_file', value: '{{ wordpress_php_auto_append_file | default("") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Configure PHP-FPM pool advanced settings
   ansible.builtin.lineinfile:
@@ -166,7 +234,7 @@
     - { key: 'rlimit_files', value: '{{ wordpress_php_fpm_rlimit_files | default("65536") }}' }
     - { key: 'rlimit_core', value: '{{ wordpress_php_fpm_rlimit_core | default("0") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Enable PHP-FPM status page
   ansible.builtin.lineinfile:
@@ -176,7 +244,7 @@
     state: present
   become: true
   when: wordpress_php_fpm_status_page | default(false)
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Enable PHP-FPM ping page
   ansible.builtin.lineinfile:
@@ -186,7 +254,7 @@
     state: present
   become: true
   when: wordpress_php_fpm_ping_page | default(false)
-  notify: restart php-fpm
+  notify: Restart php-fpm
 
 - name: Create PHP error log file
   ansible.builtin.file:
@@ -210,7 +278,7 @@
     - { key: 'session.gc_divisor', value: '{{ wordpress_php_session_gc_divisor | default("1000") }}' }
     - { key: 'session.gc_maxlifetime', value: '{{ wordpress_php_session_gc_maxlifetime | default("1440") }}' }
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when: wordpress_php_session_save_handler | default('files') == 'files'
 
 - name: Configure Redis session handling
@@ -220,13 +288,20 @@
     line: "{{ item.key }} = {{ item.value }}"
     state: present
   loop:
-    - { key: 'session.save_handler', value: 'redis' }
-    - { key: 'session.save_path', value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"' }
+    - key: 'session.save_handler'
+      value: 'redis'
+    - key: 'session.save_path'
+      value: '"tcp://{{ wordpress_redis_host | default("localhost") }}:{{ wordpress_redis_port | default("6379") }}"'
   become: true
-  notify: restart php-fpm
+  notify: Restart php-fpm
   when:
     - wordpress_php_session_save_handler | default('files') == 'redis'
     - wordpress_enable_redis | default(false)
+
+- name: Check if systemd is available (PHP)
+  ansible.builtin.stat:
+    path: /run/systemd/system
+  register: php_systemd_available
 
 - name: Create PHP-FPM systemd override directory
   ansible.builtin.file:
@@ -234,6 +309,7 @@
     state: directory
     mode: '0755'
   become: true
+  when: php_systemd_available.stat.exists | default(false)
 
 - name: Configure PHP-FPM systemd overrides
   ansible.builtin.template:
@@ -246,7 +322,9 @@
   notify:
     - reload systemd
     - restart php-fpm
-  when: wordpress_php_fpm_systemd_overrides | default({}) | length > 0
+  when:
+    - php_systemd_available.stat.exists | default(false)
+    - wordpress_php_fpm_systemd_overrides | default({}) | length > 0
 
 - name: Enable and start PHP-FPM service
   ansible.builtin.systemd:
@@ -255,6 +333,15 @@
     state: started
     daemon_reload: true
   become: true
+  when: php_systemd_available.stat.exists | default(false)
+
+- name: Start PHP-FPM service (non-systemd)
+  ansible.builtin.command:
+    cmd: "{{ wordpress_php_fpm_service }} --daemonize"
+  become: true
+  when: not (php_systemd_available.stat.exists | default(false))
+  changed_when: true
+  failed_when: false
 
 - name: Verify PHP-FPM is running
   ansible.builtin.systemd:
@@ -262,11 +349,14 @@
   register: php_fpm_status
   changed_when: false
   failed_when: false
+  when: php_systemd_available.stat.exists | default(false)
 
 - name: Display PHP-FPM status
   ansible.builtin.debug:
     msg: "PHP-FPM service is {{ php_fpm_status.stdout | default('unknown') }}"
-  when: wordpress_debug | default(false)
+  when:
+    - wordpress_debug | default(false)
+    - php_fpm_status is defined
 
 - name: Test PHP functionality
   ansible.builtin.template:

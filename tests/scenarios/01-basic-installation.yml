@@ -90,7 +90,8 @@
         activate: false
 
   roles:
-    - ansible-wordpress-enterprise
+    - role: ../../
+      become: true
 
   post_tasks:
     - name: Wait for services to be ready
@@ -102,7 +103,7 @@
       delegate_to: localhost
 
     - name: Test WordPress installation
-      uri:
+      ansible.builtin.uri:
         url: "http://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]

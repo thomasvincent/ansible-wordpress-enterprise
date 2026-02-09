@@ -110,7 +110,8 @@
       CONCATENATE_SCRIPTS: false
 
   roles:
-    - ansible-wordpress-enterprise
+    - role: ../../
+      become: true
 
   post_tasks:
     - name: Wait for Apache to be ready
@@ -122,7 +123,7 @@
       delegate_to: localhost
 
     - name: Test WordPress with Apache
-      uri:
+      ansible.builtin.uri:
         url: "http://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -131,7 +132,7 @@
       register: apache_wp_response
 
     - name: Test PHP info page (if debug enabled)
-      uri:
+      ansible.builtin.uri:
         url: "http://{{ ansible_default_ipv4.address }}/phpinfo.php"
         method: GET
         status_code: [200, 404]  # 404 is OK if not created
@@ -140,7 +141,7 @@
       ignore_errors: true
 
     - name: Test plugin functionality (check for Yoast SEO)
-      uri:
+      ansible.builtin.uri:
         url: "http://{{ ansible_default_ipv4.address }}/wp-admin/admin.php?page=wpseo_dashboard"
         method: GET
         status_code: [200, 301, 302, 404]  # Various redirect responses are OK

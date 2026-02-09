@@ -182,9 +182,9 @@ git clone https://github.com/thomasvincent/ansible-wordpress-enterprise.git
 ### System Requirements
 
 - **Control Node**
-  - Ansible 2.14 or higher
+  - Ansible 2.15 or higher
   - Python 3.8+
-  
+
 - **Target Nodes**
   - Supported OS (see platform support)
   - Python 3.6+
@@ -192,7 +192,9 @@ git clone https://github.com/thomasvincent/ansible-wordpress-enterprise.git
   - Minimum 2GB RAM
   - 20GB disk space
 
-### Required Ansible Collections
+### Dependencies
+
+**Required Ansible Collections:**
 
 ```bash
 ansible-galaxy collection install community.general
@@ -200,7 +202,7 @@ ansible-galaxy collection install community.mysql
 ansible-galaxy collection install ansible.posix
 ```
 
-### Python Dependencies
+**Python Dependencies:**
 
 ```bash
 pip install -r requirements.txt
@@ -253,7 +255,7 @@ git submodule add https://github.com/thomasvincent/ansible-wordpress-enterprise.
 git submodule update --remote roles/wordpress_enterprise
 ```
 
-## 📖 Usage Examples
+## 📖 Usage
 
 ### Development Environment
 
@@ -1075,11 +1077,11 @@ molecule destroy
       uri:
         url: "https://{{ wordpress_site_url }}"
         status_code: 200
-    
+
     - name: Verify database connection
       command: wp db check --path={{ wordpress_path }}
       become_user: "{{ wordpress_user }}"
-    
+
     - name: Test admin login
       uri:
         url: "https://{{ wordpress_site_url }}/wp-login.php"
@@ -1091,9 +1093,7 @@ molecule destroy
         status_code: 302
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+## 🛠️ Development
 
 ### Development Setup
 
@@ -1119,6 +1119,10 @@ molecule test
 ansible-lint
 yamllint .
 ```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Pull Request Process
 
