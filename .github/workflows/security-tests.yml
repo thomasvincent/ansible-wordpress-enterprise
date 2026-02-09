@@ -1,14 +1,22 @@
 name: Security Tests
 
+# DISABLED: Security tests require Docker-in-Docker with systemd support,
+# privileged containers, and complex infrastructure (MySQL, Redis, etc.)
+# that is not available in GitHub Actions standard runners.
+#
+# To run security tests locally:
+#   make test-scenario-04  # Comprehensive security hardening
+#   make test-scenario-05  # Security edge cases
+#   make test-security-all # All security tests
+#
+# These tests require:
+# - Docker with privileged mode
+# - systemd-capable containers
+# - Multiple service dependencies
+# - SSH connectivity between containers
+
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    # Run security tests daily at 2 AM UTC
-    - cron: '0 2 * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger only
 
 permissions:
   contents: read

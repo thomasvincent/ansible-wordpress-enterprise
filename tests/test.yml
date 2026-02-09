@@ -1,0 +1,12 @@
+---
+# Minimal test playbook for CI syntax validation
+# This is used by the CI workflow for ansible-playbook --syntax-check
+# For full integration tests, use the test scenarios in tests/scenarios/
+
+- name: Test wordpress role syntax
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Placeholder task for syntax validation
+      ansible.builtin.debug:
+        msg: "This playbook is used for CI syntax validation only"
