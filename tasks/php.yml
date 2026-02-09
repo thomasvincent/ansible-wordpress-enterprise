@@ -99,6 +99,15 @@
   become: true
   failed_when: false
 
+- name: Ensure PHP-FPM pool.d directory exists
+  ansible.builtin.file:
+    path: "{{ wordpress_php_fpm_pool_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+
 - name: Configure PHP-FPM pool
   ansible.builtin.template:
     src: php-fpm-pool.conf.j2
