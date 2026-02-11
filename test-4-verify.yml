@@ -55,14 +55,19 @@
     - name: Install and configure PHP
       ansible.builtin.include_tasks: tasks/php.yml
 
-    - name: Install and configure web server
-      ansible.builtin.include_tasks: tasks/webserver.yml
+    - name: Install and configure web server (Nginx)
+      ansible.builtin.include_tasks: tasks/webserver_nginx.yml
+      when: wordpress_web_server == "nginx"
+
+    - name: Install and configure web server (Apache)
+      ansible.builtin.include_tasks: tasks/webserver_apache.yml
+      when: wordpress_web_server == "apache"
 
     - name: Install WordPress
       ansible.builtin.include_tasks: tasks/wordpress_install.yml
 
     - name: Configure WordPress
-      ansible.builtin.include_tasks: tasks/wordpress_config.yml
+      ansible.builtin.include_tasks: tasks/wordpress_configure.yml
 
     - name: Verify WordPress Installation
       block:
