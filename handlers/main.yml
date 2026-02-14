@@ -110,6 +110,26 @@
   become: true
   when: ansible_os_family == "RedHat"
 
+# Sysctl Handlers
+- name: Reload sysctl
+  ansible.builtin.command:
+    cmd: sysctl -p
+  become: true
+
+# SSH Handlers
+- name: Restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  become: true
+
+# WP-CLI Handlers
+- name: Run wp-cli cache flush
+  ansible.builtin.command:
+    cmd: wp cache flush --path={{ wordpress_install_dir }}
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+
 # System Handlers
 - name: reboot system
   ansible.builtin.reboot:

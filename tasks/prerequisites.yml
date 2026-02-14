@@ -42,7 +42,7 @@
   ansible.builtin.user:
     name: "{{ wordpress_system_user | default('www-data') }}"
     system: true
-    ansible.builtin.shell: /bin/false
+    shell: /bin/false
     home: /var/www
     createhome: true
     state: present
