@@ -63,7 +63,7 @@
 
 - name: Allow SSH access (firewalld)
   ansible.posix.firewalld:
-    ansible.builtin.service: ssh
+    service: ssh
     permanent: true
     state: enabled
     immediate: true
@@ -84,7 +84,7 @@
 
 - name: Allow HTTP traffic (firewalld)
   ansible.posix.firewalld:
-    ansible.builtin.service: "{{ wordpress_firewall_http_service }}"
+    service: "{{ wordpress_firewall_http_service }}"
     permanent: true
     state: enabled
     immediate: true
@@ -106,7 +106,7 @@
 
 - name: Allow HTTPS traffic (firewalld)
   ansible.posix.firewalld:
-    ansible.builtin.service: "{{ wordpress_firewall_https_service }}"
+    service: "{{ wordpress_firewall_https_service }}"
     permanent: true
     state: enabled
     immediate: true

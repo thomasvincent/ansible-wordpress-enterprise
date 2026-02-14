@@ -9,7 +9,7 @@
 
   vars:
     test_run_id: "{{ test_run_id | default('security_edge_test') }}"
-    wordpress_path: "/var/www/html/wordpress"
+    wordpress_install_dir: "/var/www/html/wordpress"
 
     # Edge case configurations
     wordpress_security_hardening_enabled: true
@@ -27,7 +27,7 @@
         wordpress_install_security_tools: false
         wordpress_fail2ban_enabled: false
       - name: "custom_paths"
-        wordpress_path: "/opt/custom/wordpress"
+        wordpress_install_dir: "/opt/custom/wordpress"
         wordpress_access_log_path: "/var/log/custom/access.log"
 
   pre_tasks:
@@ -67,10 +67,15 @@
             temp_wp_path: "/nonexistent/wordpress/path"
 
         - name: Test security tasks with missing directory
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_path: "{{ temp_wp_path }}"
-          failed_when: false
+          block:
+            - name: Run security hardening with missing directory
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_install_dir: "{{ temp_wp_path }}"
+          rescue:
+            - name: Missing directory handled gracefully
+              ansible.builtin.debug:
+                msg: "Security tasks failed with missing directory as expected"
 
         - name: Verify graceful handling of missing directories
           ansible.builtin.debug:
@@ -138,7 +143,7 @@
         - name: Create test user with limited privileges
           ansible.builtin.user:
             name: testuser
-            ansible.builtin.shell: /bin/bash
+            shell: /bin/bash
             create_home: true
 
         - name: Test security status script as non-root user
@@ -239,10 +244,15 @@
           failed_when: false
 
         - name: Test security operations with reduced available space
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_security_status_script: false  # Skip to save space
-          failed_when: false
+          block:
+            - name: Run security hardening under resource constraints
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_security_status_script: false
+          rescue:
+            - name: Resource constraint handled gracefully
+              ansible.builtin.debug:
+                msg: "Security tasks handled resource constraints as expected"
 
         - name: Cleanup large test file
           ansible.builtin.file:
@@ -390,10 +400,15 @@
             - /tmp/wordpress2/wp-content/uploads
 
         - name: Test security hardening on multiple installations
-          ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
-          vars:
-            wordpress_path: /tmp/wordpress2
-          failed_when: false
+          block:
+            - name: Run security hardening on second installation
+              ansible.builtin.include_tasks: ../../tasks/security_hardening.yml
+              vars:
+                wordpress_install_dir: /tmp/wordpress2
+          rescue:
+            - name: Multi-installation test handled gracefully
+              ansible.builtin.debug:
+                msg: "Security hardening on alternative path handled as expected"
 
         - name: Cleanup second WordPress directory
           ansible.builtin.file:
