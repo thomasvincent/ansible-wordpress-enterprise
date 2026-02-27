@@ -38,15 +38,29 @@
     - ansible_os_family == "Debian"
     - wordpress_configure_firewall | bool
 
-- name: Set UFW default policies (Debian/Ubuntu)
+- name: Set UFW default policy for incoming
   community.general.ufw:
-    direction: "{{ item.direction }}"
-    policy: "{{ item.policy }}"
+    direction: incoming
+    policy: deny
   become: true
-  loop:
-    - { direction: "incoming", policy: "deny" }
-    - { direction: "outgoing", policy: "allow" }
-    - { direction: "routed", policy: "deny" }
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Set UFW default policy for outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  become: true
+  when:
+    - ansible_os_family == "Debian"
+    - wordpress_configure_firewall | bool
+
+- name: Set UFW default policy for routed
+  community.general.ufw:
+    direction: routed
+    policy: deny
+  become: true
   when:
     - ansible_os_family == "Debian"
     - wordpress_configure_firewall | bool
