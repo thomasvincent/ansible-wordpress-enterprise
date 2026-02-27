@@ -5,6 +5,8 @@ skip_list:
   - yaml[line-length]  # Allow long lines
   - key-order  # Cosmetic issue, not a bug
   - risky-file-permissions  # File permissions are managed elsewhere
+  - no-handler  # Some tasks intentionally run when changed
+  - role-name[path]  # Role tests use relative paths to test the role in-place
 
 exclude_paths:
   - .github/
