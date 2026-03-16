@@ -27,7 +27,7 @@ env:
 jobs:
   security-lint:
     name: Security Lint & Static Analysis
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, linux, x64]
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +74,7 @@ jobs:
 
   molecule-test:
     name: Molecule Security Verification
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, linux, x64]
     needs: security-lint
 
     steps:
