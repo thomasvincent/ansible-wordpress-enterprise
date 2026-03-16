@@ -27,7 +27,7 @@ env:
 jobs:
   security-lint:
     name: Security Lint & Static Analysis
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +74,7 @@ jobs:
 
   molecule-test:
     name: Molecule Security Verification
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted]
     needs: security-lint
 
     steps:
