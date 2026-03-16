@@ -63,7 +63,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: [lint]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
