@@ -1,0 +1,13 @@
+---
+- name: Prepare
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Wait for system to be ready
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+    
+    - name: Install python for Ansible
+      ansible.builtin.raw: test -e /usr/bin/python3 || (dnf -y install python3)
+      changed_when: false
+      failed_when: false

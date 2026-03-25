@@ -2,7 +2,7 @@
 
 FROM {{ item.image }}
 
-{% if item.image.startswith('ubuntu') %}
+{% if item.image.startswith('ubuntu') or item.image.startswith('debian') %}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     python3 \
@@ -21,8 +21,8 @@ RUN dnf -y install \
 
 {% endif %}
 
-# Install Ansible (handle PEP 668 for newer Ubuntu)
-{% if item.image == 'ubuntu:24.04' %}
+# Install Ansible (handle PEP 668 for newer Ubuntu and Debian)
+{% if item.image == 'ubuntu:24.04' or item.image == 'debian:12' %}
 RUN python3 -m pip install ansible --break-system-packages
 {% else %}
 RUN python3 -m pip install --upgrade pip && \
