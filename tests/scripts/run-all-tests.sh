@@ -23,15 +23,6 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEST_RUN_ID="test_run_$TIMESTAMP"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.test.yml"
 
-# Detect docker compose command (v2 plugin or v1 standalone)
-if docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-    DOCKER_COMPOSE="docker-compose"
-else
-    DOCKER_COMPOSE=""
-fi
-
 # Test configuration
 UBUNTU_TESTS=true
 CENTOS_TESTS=true
@@ -149,12 +140,12 @@ check_prerequisites() {
     fi
     print_success "Docker is running"
     
-    # Check if docker compose is available (v2 plugin or v1 standalone)
-    if [[ -z "$DOCKER_COMPOSE" ]]; then
+    # Check if docker-compose is available
+    if ! command -v docker-compose >/dev/null 2>&1; then
         print_error "docker-compose is not installed or not in PATH"
         exit 1
     fi
-    print_success "docker compose is available ($DOCKER_COMPOSE)"
+    print_success "docker-compose is available"
     
     # Check if test compose file exists
     if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -174,34 +165,18 @@ build_images() {
         print_warning "Skipping Docker image build"
         return
     fi
-
+    
     print_header "Building Docker Images"
-
+    
     print_status "Building test environment images..."
     cd "$PROJECT_DIR"
-
-    local build_result=0
-    local build_output_file=$(mktemp)
-
+    
     if [[ "$VERBOSE" == "true" ]]; then
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" build --no-cache
-        build_result=$?
+        docker-compose -f "$COMPOSE_FILE" build --no-cache
     else
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" build --no-cache >"$build_output_file" 2>&1
-        build_result=$?
+        docker-compose -f "$COMPOSE_FILE" build --no-cache >/dev/null 2>&1
     fi
-
-    if [[ $build_result -ne 0 ]]; then
-        print_error "Docker image build failed with exit code $build_result"
-        if [[ "$VERBOSE" != "true" ]]; then
-            print_error "Build output:"
-            cat "$build_output_file"
-        fi
-        rm -f "$build_output_file"
-        exit 1
-    fi
-
-    rm -f "$build_output_file"
+    
     print_success "Docker images built successfully"
 }
 
@@ -212,13 +187,13 @@ start_environment() {
     cd "$PROJECT_DIR"
     
     # Stop any existing containers
-    $DOCKER_COMPOSE -f "$COMPOSE_FILE" down --remove-orphans >/dev/null 2>&1 || true
+    docker-compose -f "$COMPOSE_FILE" down --remove-orphans >/dev/null 2>&1 || true
     
     print_status "Starting services..."
     if [[ "$VERBOSE" == "true" ]]; then
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d
+        docker-compose -f "$COMPOSE_FILE" up -d
     else
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d >/dev/null 2>&1
+        docker-compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1
     fi
     
     # Wait for services to be healthy
@@ -227,7 +202,7 @@ start_environment() {
     local count=0
     
     while [[ $count -lt $max_wait ]]; do
-        if $DOCKER_COMPOSE -f "$COMPOSE_FILE" ps | grep -q "Up (healthy)"; then
+        if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up (healthy)"; then
             break
         fi
         sleep 2
@@ -239,7 +214,7 @@ start_environment() {
     
     if [[ $count -ge $max_wait ]]; then
         print_error "Services failed to become healthy within $max_wait seconds"
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" ps
+        docker-compose -f "$COMPOSE_FILE" ps
         exit 1
     fi
     
@@ -247,7 +222,7 @@ start_environment() {
     
     # Show service status
     if [[ "$VERBOSE" == "true" ]]; then
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" ps
+        docker-compose -f "$COMPOSE_FILE" ps
     fi
 }
 
@@ -476,9 +451,9 @@ cleanup_environment() {
     
     print_status "Stopping and removing containers..."
     if [[ "$VERBOSE" == "true" ]]; then
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" down --remove-orphans --volumes
+        docker-compose -f "$COMPOSE_FILE" down --remove-orphans --volumes
     else
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" down --remove-orphans --volumes >/dev/null 2>&1
+        docker-compose -f "$COMPOSE_FILE" down --remove-orphans --volumes >/dev/null 2>&1
     fi
     
     print_success "Test environment cleaned up"

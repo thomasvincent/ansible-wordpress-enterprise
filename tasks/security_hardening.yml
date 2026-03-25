@@ -7,11 +7,7 @@
     msg: |
       Starting WordPress security hardening for {{ ansible_os_family }}
       Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
-      Security system: {{
-        'SELinux' if ansible_os_family == 'RedHat'
-        else 'AppArmor' if ansible_os_family == 'Debian'
-        else 'None detected'
-      }}
+      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None detected' }}
 
 # Configure SELinux for RedHat-based systems
 - name: Configure SELinux security policies
@@ -41,45 +37,40 @@
         recurse: "{{ item.recurse | default(false) }}"
         state: directory
       loop:
-        - path: "{{ wordpress_install_dir }}"
+        - path: "{{ wordpress_path }}"
           mode: '0755'
-          owner: "{{ wordpress_system_user }}"
-          group: "{{ wordpress_system_group }}"
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
           recurse: true
-        - path: "{{ wordpress_install_dir }}/wp-content"
+        - path: "{{ wordpress_path }}/wp-content"
           mode: '0755'
-          owner: "{{ wordpress_system_user }}"
-          group: "{{ wordpress_system_group }}"
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
           recurse: false
-        - path: "{{ wordpress_install_dir }}/wp-content/uploads"
+        - path: "{{ wordpress_path }}/wp-content/uploads"
           mode: '0755'
-          owner: "{{ wordpress_system_user }}"
-          group: "{{ wordpress_system_group }}"
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
           recurse: true
-        - path: "{{ wordpress_install_dir }}/wp-content/cache"
+        - path: "{{ wordpress_path }}/wp-content/cache"
           mode: '0755'
-          owner: "{{ wordpress_system_user }}"
-          group: "{{ wordpress_system_group }}"
+          owner: "{{ wordpress_user }}"
+          group: "{{ wordpress_group }}"
           recurse: true
       become: true
-
-    - name: Check if WordPress configuration file exists
-      ansible.builtin.stat:
-        path: "{{ wordpress_install_dir }}/wp-config.php"
-      register: wordpress_config_file_exists
 
     - name: Set secure permissions on WordPress configuration
       ansible.builtin.file:
-        path: "{{ wordpress_install_dir }}/wp-config.php"
+        path: "{{ wordpress_path }}/wp-config.php"
         mode: '0644'
-        owner: "{{ wordpress_system_user }}"
-        group: "{{ wordpress_system_group }}"
+        owner: "{{ wordpress_user }}"
+        group: "{{ wordpress_group }}"
       become: true
-      when: wordpress_config_file_exists.stat.exists
+      when: wordpress_config_file_exists.stat.exists | default(false)
 
     - name: Remove execution permissions from uploads directory
       ansible.builtin.find:
-        paths: "{{ wordpress_install_dir }}/wp-content/uploads"
+        paths: "{{ wordpress_path }}/wp-content/uploads"
         file_type: file
         recurse: true
       register: upload_files
@@ -127,10 +118,10 @@
           <Files *.py>
           deny from all
           </Files>
-        dest: "{{ wordpress_install_dir }}/wp-content/uploads/.htaccess"
+        dest: "{{ wordpress_path }}/wp-content/uploads/.htaccess"
         mode: '0644'
-        owner: "{{ wordpress_system_user }}"
-        group: "{{ wordpress_system_group }}"
+        owner: "{{ wordpress_user }}"
+        group: "{{ wordpress_group }}"
       when:
         - wordpress_web_server == "apache"
         - wordpress_secure_uploads | default(true)
@@ -195,8 +186,6 @@
         - wordpress_install_security_tools | default(true)
 
     - name: Configure automatic security updates
-      become: true
-      when: wordpress_auto_security_updates | default(true)
       block:
         - name: Install unattended-upgrades (Debian/Ubuntu)
           ansible.builtin.package:
@@ -227,9 +216,10 @@
           when: ansible_os_family == "RedHat"
           notify:
             - restart yum-cron
+      become: true
+      when: wordpress_auto_security_updates | default(true)
 
     - name: Configure system-wide security settings
-      become: true
       block:
         - name: Disable unused network services
           ansible.builtin.systemd:
@@ -294,6 +284,7 @@
               value: '7'
           become: true
           when: wordpress_password_policy | default(true)
+      become: true
 
 - name: Generate security status report
   ansible.builtin.template:
@@ -332,11 +323,11 @@
 
       # Check for suspicious files
       echo "Checking for suspicious files..."
-      find {{ wordpress_install_dir }} -name "*.php" -exec grep -l "eval\|base64_decode\|gzinflate" {} \; 2>/dev/null
+      find {{ wordpress_path }} -name "*.php" -exec grep -l "eval\|base64_decode\|gzinflate" {} \; 2>/dev/null
 
       # Check file permissions
       echo "Checking file permissions..."
-      find {{ wordpress_install_dir }} -type f -perm -002 -ls
+      find {{ wordpress_path }} -type f -perm -002 -ls
 
       # Generate security report
       echo "Generating security status report..."
@@ -366,16 +357,10 @@
     msg: |
       WordPress Security Hardening Complete!
 
-      Security system: {{
-        'SELinux' if ansible_os_family == 'RedHat'
-        else 'AppArmor' if ansible_os_family == 'Debian'
-        else 'Basic hardening only'
-      }}
+      Security system: {{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'Basic hardening only' }}
       Fail2ban: {{ 'Configured' if wordpress_fail2ban_enabled | default(true) else 'Disabled' }}
       Auto updates: {{ 'Enabled' if wordpress_auto_security_updates | default(true) else 'Disabled' }}
-      Security tools: {{
-        'Installed' if wordpress_install_security_tools | default(true) else 'Not installed'
-      }}
+      Security tools: {{ 'Installed' if wordpress_install_security_tools | default(true) else 'Not installed' }}
 
       Security scripts available:
       - /usr/local/bin/wordpress-security-status
@@ -391,17 +376,16 @@
       Run 'wordpress-security-status' to check current security status.
 
 - name: Validate security configuration
-  when: wordpress_security_validate | default(true)
   block:
     - name: Test file permissions
       ansible.builtin.stat:
-        path: "{{ wordpress_install_dir }}/wp-config.php"
+        path: "{{ wordpress_path }}/wp-config.php"
       register: wp_config_perms
       failed_when: false
 
     - name: Test directory permissions
       ansible.builtin.stat:
-        path: "{{ wordpress_install_dir }}/wp-content/uploads"
+        path: "{{ wordpress_path }}/wp-content/uploads"
       register: wp_uploads_perms
       failed_when: false
 
@@ -411,19 +395,14 @@
       register: security_services
       loop:
         - fail2ban
-        - auditd
+        - "{{ 'auditd' if ansible_os_family == 'RedHat' else 'auditd' }}"
       failed_when: false
 
     - name: Display security validation results
       ansible.builtin.debug:
         msg: |
           Security Validation Results:
-          wp-config.php permissions: {{
-            wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found'
-          }}
-          uploads directory permissions: {{
-            wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found'
-          }}
-          Security services status: {{
-            security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ')
-          }}
+          wp-config.php permissions: {{ wp_config_perms.stat.mode if wp_config_perms.stat.exists else 'File not found' }}
+          uploads directory permissions: {{ wp_uploads_perms.stat.mode if wp_uploads_perms.stat.exists else 'Directory not found' }}
+          Security services status: {{ security_services.results | map(attribute='status') | map(attribute='ActiveState') | join(', ') }}
+  when: wordpress_security_validate | default(true)

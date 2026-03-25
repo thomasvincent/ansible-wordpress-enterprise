@@ -83,15 +83,26 @@ ansible-playbook examples/microsoft-azure.yml --ask-vault-pass
 Oracle Cloud Infrastructure deployment.
 
 **Features:**
-- OCI Autonomous Database
-- OCI Object Storage
-- Load Balancer support
-- Perfect for: OCI infrastructure
+- OCI Compute Instance provisioning (VM.Standard.E4.Flex)
+- OCI Autonomous Database (MySQL)
+- OCI Block Storage for persistent data
+- OCI Load Balancer integration (Flexible shape)
+- OCI Object Storage for media and backups
+- OCI Free Tier optimization
+- PAUSATF WordPress deployment support
+- Perfect for: OCI infrastructure and Always Free tier
 
 **Quick Start:**
 ```bash
 ansible-playbook examples/oracle-cloud.yml --ask-vault-pass
 ```
+
+**OCI-Specific Configuration:**
+- Compartment-based resource isolation
+- Flexible compute shapes (2 OCPUs, 16GB RAM)
+- Block volume backup policies (bronze, silver, gold)
+- Load balancer health checks and SSL termination
+- Object storage for WordPress media and automated backups
 
 ---
 

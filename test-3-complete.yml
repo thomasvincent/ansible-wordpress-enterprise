@@ -53,19 +53,19 @@
 
   tasks:
     - name: Test external database connectivity
-      ansible.builtin.wait_for:
+      wait_for:
         host: "{{ wordpress_db_host }}"
         port: "{{ wordpress_db_port }}"
         timeout: 30
 
     - name: Install prerequisites
-      ansible.builtin.include_tasks: tasks/prerequisites.yml
+      include_tasks: tasks/prerequisites.yml
 
     - name: Install WordPress
-      ansible.builtin.include_tasks: tasks/wordpress_install.yml
+      include_tasks: tasks/wordpress_install.yml
 
     - name: Download latest WordPress (simplified)
-      ansible.builtin.get_url:
+      get_url:
         url: "https://wordpress.org/latest.tar.gz"
         dest: "/tmp/wordpress.tar.gz"
         mode: '0644'
@@ -73,13 +73,13 @@
       register: wp_download
 
     - name: Extract WordPress
-      ansible.builtin.unarchive:
+      unarchive:
         src: "/tmp/wordpress.tar.gz"
         dest: "/tmp"
         remote_src: true
 
     - name: Copy WordPress files
-      ansible.builtin.copy:
+      copy:
         src: "/tmp/wordpress/"
         dest: "{{ wordpress_install_dir }}/"
         remote_src: true
@@ -88,7 +88,7 @@
         mode: preserve
 
     - name: Create wp-config.php from template
-      ansible.builtin.template:
+      template:
         src: wp-config.php.j2
         dest: "{{ wordpress_install_dir }}/wp-config.php"
         owner: "{{ wordpress_system_user }}"
@@ -96,7 +96,7 @@
         mode: '0600'
 
     - name: Verify WordPress files exist
-      ansible.builtin.stat:
+      stat:
         path: "{{ item }}"
       loop:
         - "{{ wordpress_install_dir }}/wp-config.php"
@@ -105,7 +105,7 @@
       register: wp_files_check
 
     - name: Display WordPress installation results
-      ansible.builtin.debug:
+      debug:
         msg:
           - "✅ Complete WordPress installation test completed!"
           - "✅ WordPress downloaded and extracted"

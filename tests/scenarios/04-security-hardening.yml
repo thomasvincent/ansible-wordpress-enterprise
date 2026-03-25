@@ -10,7 +10,7 @@
   vars:
     # Test configuration
     test_run_id: "{{ test_run_id | default('security_test') }}"
-    wordpress_install_dir: "/var/www/html/wordpress"
+    wordpress_path: "/var/www/html/wordpress"
     wordpress_db_name: "wordpress_security_test"
     wordpress_db_user: "wp_security_user"
     wordpress_db_password: "SecureTestPass123!"
@@ -61,10 +61,7 @@
     - name: Set test facts
       ansible.builtin.set_fact:
         test_start_time: "{{ ansible_date_time.epoch }}"
-        expected_security_system: >-
-          {{ 'SELinux' if ansible_os_family == 'RedHat'
-          else 'AppArmor' if ansible_os_family == 'Debian'
-          else 'None' }}
+        expected_security_system: "{{ 'SELinux' if ansible_os_family == 'RedHat' else 'AppArmor' if ansible_os_family == 'Debian' else 'None' }}"
 
     - name: Display test information
       ansible.builtin.debug:
@@ -77,8 +74,7 @@
           Cache Type: {{ wordpress_cache_type }}
 
   roles:
-    - role: ../../
-      become: true
+    - role: ansible-wordpress-enterprise
       tags: ['wordpress', 'security']
 
   post_tasks:
@@ -121,7 +117,7 @@
       block:
         - name: Check WordPress directory permissions
           ansible.builtin.stat:
-            path: "{{ wordpress_install_dir }}"
+            path: "{{ wordpress_path }}"
           register: wp_dir_stat
 
         - name: Verify WordPress directory ownership and permissions
@@ -134,7 +130,7 @@
             success_msg: "WordPress directory has correct permissions"
 
         - name: Check SELinux contexts on WordPress files (RHEL/CentOS)
-          ansible.builtin.command: ls -laZ {{ wordpress_install_dir }}
+          ansible.builtin.command: ls -laZ {{ wordpress_path }}
           register: wp_selinux_context
           changed_when: false
           when: ansible_os_family == "RedHat"
@@ -280,11 +276,7 @@
     - name: Test - Verify AppArmor profiles are in correct mode
       block:
         - name: Check AppArmor profile modes
-          ansible.builtin.shell: |
-            set -o pipefail
-            aa-status | grep -E "(wordpress|php|nginx|apache)" | head -10
-          args:
-            executable: /bin/bash
+          ansible.builtin.shell: aa-status | grep -E "(wordpress|php|nginx|apache)" | head -10
           register: apparmor_profile_modes
           changed_when: false
 
@@ -402,7 +394,7 @@
       block:
         - name: Check uploads directory protection (Apache)
           ansible.builtin.stat:
-            path: "{{ wordpress_install_dir }}/wp-content/uploads/.htaccess"
+            path: "{{ wordpress_path }}/wp-content/uploads/.htaccess"
           register: htaccess_protection
           when: wordpress_web_server == "apache"
 
@@ -416,7 +408,7 @@
 
         - name: Check wp-config.php permissions
           ansible.builtin.stat:
-            path: "{{ wordpress_install_dir }}/wp-config.php"
+            path: "{{ wordpress_path }}/wp-config.php"
           register: wp_config_stat
 
         - name: Verify wp-config.php has secure permissions
@@ -433,7 +425,6 @@
         - name: Check security maintenance cron job
           ansible.builtin.command: crontab -l
           register: cron_jobs
-          become: true
           become_user: root
           changed_when: false
 
@@ -483,7 +474,7 @@
     - name: Test - Verify security system handles edge cases
       block:
         - name: Test file context restoration (SELinux)
-          ansible.builtin.command: restorecon -R -v -n {{ wordpress_install_dir }}
+          ansible.builtin.command: restorecon -R -v -n {{ wordpress_path }}
           register: restorecon_test
           changed_when: false
           failed_when: false

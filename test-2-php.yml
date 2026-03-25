@@ -29,29 +29,29 @@
 
   tasks:
     - name: Install Prerequisites
-      ansible.builtin.include_tasks: tasks/prerequisites.yml
+      include_tasks: tasks/prerequisites.yml
 
     - name: Install PHP
-      ansible.builtin.include_tasks: tasks/php.yml
+      include_tasks: tasks/php.yml
 
     - name: Verify PHP installation
-      ansible.builtin.command: php{{ wordpress_php_version }} --version
+      command: php{{ wordpress_php_version }} --version
       register: php_version
       changed_when: false
 
     - name: Check PHP-FPM service status
-      ansible.builtin.systemd:
+      systemd:
         name: "{{ wordpress_php_fpm_service }}"
         state: started
       register: php_fpm_status
 
     - name: Verify PHP extensions
-      ansible.builtin.command: php{{ wordpress_php_version }} -m
+      command: php{{ wordpress_php_version }} -m
       register: php_modules
       changed_when: false
 
     - name: Display PHP test results
-      ansible.builtin.debug:
+      debug:
         msg:
           - "✅ PHP {{ wordpress_php_version }} installation completed!"
           - "✅ PHP version: {{ php_version.stdout.split('\n')[0] }}"

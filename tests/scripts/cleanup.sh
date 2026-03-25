@@ -18,15 +18,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.test.yml"
 
-# Detect docker compose command (v2 plugin or v1 standalone)
-if docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-    DOCKER_COMPOSE="docker-compose"
-else
-    DOCKER_COMPOSE=""
-fi
-
 # Cleanup options
 REMOVE_IMAGES=false
 REMOVE_REPORTS=false
@@ -166,12 +157,12 @@ check_prerequisites() {
     fi
     print_success "Docker is running"
     
-    # Check if docker compose is available (v2 plugin or v1 standalone)
-    if [[ -z "$DOCKER_COMPOSE" ]]; then
+    # Check if docker-compose is available
+    if ! command -v docker-compose >/dev/null 2>&1; then
         print_error "docker-compose is not installed or not in PATH"
         exit 1
     fi
-    print_success "docker compose is available ($DOCKER_COMPOSE)"
+    print_success "docker-compose is available"
     
     # Check if compose file exists
     if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -194,9 +185,9 @@ cleanup_containers() {
     print_status "Stopping and removing test containers..."
     
     if [[ "$VERBOSE" == "true" ]]; then
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" down --remove-orphans --volumes
+        docker-compose -f "$COMPOSE_FILE" down --remove-orphans --volumes
     else
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" down --remove-orphans --volumes >/dev/null 2>&1
+        docker-compose -f "$COMPOSE_FILE" down --remove-orphans --volumes >/dev/null 2>&1
     fi
     
     print_success "Containers and volumes removed"
@@ -230,8 +221,8 @@ cleanup_images() {
     
     # Get image names from compose file
     local test_images
-    test_images=$($DOCKER_COMPOSE -f "$COMPOSE_FILE" config --services 2>/dev/null | while read -r service; do
-        $DOCKER_COMPOSE -f "$COMPOSE_FILE" config | grep -A 10 "^  $service:" | grep "image:" | cut -d':' -f2- | xargs
+    test_images=$(docker-compose -f "$COMPOSE_FILE" config --services 2>/dev/null | while read -r service; do
+        docker-compose -f "$COMPOSE_FILE" config | grep -A 10 "^  $service:" | grep "image:" | cut -d':' -f2- | xargs
     done)
     
     # Also look for built images
