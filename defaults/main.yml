@@ -11,6 +11,9 @@ wordpress_site_url: "https://{{ ansible_fqdn }}"
 wordpress_site_title: "Enterprise WordPress Site"
 
 # WordPress admin user
+# NOTE: For production, override passwords in group_vars or use ansible-vault
+# The /dev/null lookup generates a new password each run (not idempotent).
+# For idempotent passwords, use: lookup('password', 'credentials/admin_password length=32')
 wordpress_admin_user: "wpadmin"
 wordpress_admin_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
 wordpress_admin_email: "admin@{{ ansible_domain | default('example.com') }}"

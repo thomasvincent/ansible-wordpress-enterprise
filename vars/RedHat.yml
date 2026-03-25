@@ -59,10 +59,10 @@ wordpress_php_fpm_service: "php{{ wordpress_php_version }}-fpm"
 wordpress_redis_service: "redis"
 wordpress_memcached_service: "memcached"
 
-# Paths
-wordpress_php_ini_path: "/etc/php/{{ wordpress_php_version }}/fpm/php.ini"
-wordpress_php_fpm_conf_path: "/etc/php/{{ wordpress_php_version }}/fpm/php-fpm.conf"
-wordpress_php_fpm_pool_path: "/etc/php/{{ wordpress_php_version }}/fpm/pool.d/www.conf"
+# Paths (Remi PHP uses /etc/opt/remi/phpXY/ structure on RHEL)
+wordpress_php_ini_path: "/etc/opt/remi/php{{ wordpress_php_version | replace('.', '') }}/php.ini"
+wordpress_php_fpm_conf_path: "/etc/opt/remi/php{{ wordpress_php_version | replace('.', '') }}/php-fpm.conf"
+wordpress_php_fpm_pool_path: "/etc/opt/remi/php{{ wordpress_php_version | replace('.', '') }}/php-fpm.d/www.conf"
 wordpress_nginx_conf_path: "/etc/nginx"
 wordpress_apache_conf_path: "/etc/httpd"
 wordpress_nginx_sites_available: "{{ wordpress_nginx_conf_path }}/conf.d"
