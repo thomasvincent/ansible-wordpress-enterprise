@@ -17,7 +17,7 @@ env:
 jobs:
   security-hardening-tests:
     name: Security Hardening Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     strategy:
       fail-fast: false
       matrix:
@@ -160,7 +160,7 @@ jobs:
 
   security-compliance-check:
     name: Security Compliance Check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     needs: security-hardening-tests
     if: always()
 
@@ -221,7 +221,7 @@ jobs:
 
   security-regression-test:
     name: Security Regression Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     if: github.event_name == 'schedule'
 
     steps:

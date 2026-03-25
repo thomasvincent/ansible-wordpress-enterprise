@@ -22,7 +22,7 @@ permissions:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     steps:
       - name: Checkout code
@@ -47,7 +47,7 @@ jobs:
 
   test-ubuntu-22:
     name: Test - Ubuntu 22.04
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: lint
     steps:
@@ -79,7 +79,7 @@ jobs:
 
   test-ubuntu-24:
     name: Test - Ubuntu 24.04
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: lint
     steps:
@@ -111,7 +111,7 @@ jobs:
 
   test-rocky-9:
     name: Test - Rocky Linux 9
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: lint
     steps:
@@ -143,7 +143,7 @@ jobs:
 
   integration-test:
     name: Integration Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: [test-ubuntu-22, test-ubuntu-24, test-rocky-9]
     steps:
@@ -170,7 +170,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
     needs: [integration-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
