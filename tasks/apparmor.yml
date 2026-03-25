@@ -12,9 +12,7 @@
 - name: Set AppArmor facts
   ansible.builtin.set_fact:
     apparmor_enabled: "{{ apparmor_status.rc == 0 }}"
-    apparmor_profiles_loaded: >-
-      {{ apparmor_status.stdout | regex_findall('profiles are loaded') | length > 0
-      if apparmor_status.rc == 0 else false }}
+    apparmor_profiles_loaded: "{{ apparmor_status.stdout | regex_findall('profiles are loaded') | length > 0 if apparmor_status.rc == 0 else false }}"
   when: ansible_os_family == "Debian"
 
 - name: Display AppArmor status
@@ -97,18 +95,18 @@
         /etc/ssl/certs/** r,
 
         # WordPress directories - read access
-        {{ wordpress_install_dir }}/ r,
-        {{ wordpress_install_dir }}/** r,
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
 
         # WordPress writable directories
-        {{ wordpress_install_dir }}/wp-content/ rw,
-        {{ wordpress_install_dir }}/wp-content/** rw,
-        {{ wordpress_install_dir }}/wp-content/uploads/ rw,
-        {{ wordpress_install_dir }}/wp-content/uploads/** rw,
-        {{ wordpress_install_dir }}/wp-content/cache/ rw,
-        {{ wordpress_install_dir }}/wp-content/cache/** rw,
-        {{ wordpress_install_dir }}/wp-content/upgrade/ rw,
-        {{ wordpress_install_dir }}/wp-content/upgrade/** rw,
+        {{ wordpress_path }}/wp-content/ rw,
+        {{ wordpress_path }}/wp-content/** rw,
+        {{ wordpress_path }}/wp-content/uploads/ rw,
+        {{ wordpress_path }}/wp-content/uploads/** rw,
+        {{ wordpress_path }}/wp-content/cache/ rw,
+        {{ wordpress_path }}/wp-content/cache/** rw,
+        {{ wordpress_path }}/wp-content/upgrade/ rw,
+        {{ wordpress_path }}/wp-content/upgrade/** rw,
 
         # System directories
         /proc/*/stat r,
@@ -184,8 +182,8 @@
         /etc/letsencrypt/** r,
 
         # WordPress directories - read access
-        {{ wordpress_install_dir }}/ r,
-        {{ wordpress_install_dir }}/** r,
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
 
         # Log files
         /var/log/nginx/ rw,
@@ -258,16 +256,16 @@
         /etc/letsencrypt/** r,
 
         # WordPress directories - read access
-        {{ wordpress_install_dir }}/ r,
-        {{ wordpress_install_dir }}/** r,
+        {{ wordpress_path }}/ r,
+        {{ wordpress_path }}/** r,
 
         # WordPress writable directories
-        {{ wordpress_install_dir }}/wp-content/ rw,
-        {{ wordpress_install_dir }}/wp-content/** rw,
-        {{ wordpress_install_dir }}/wp-content/uploads/ rw,
-        {{ wordpress_install_dir }}/wp-content/uploads/** rw,
-        {{ wordpress_install_dir }}/wp-content/cache/ rw,
-        {{ wordpress_install_dir }}/wp-content/cache/** rw,
+        {{ wordpress_path }}/wp-content/ rw,
+        {{ wordpress_path }}/wp-content/** rw,
+        {{ wordpress_path }}/wp-content/uploads/ rw,
+        {{ wordpress_path }}/wp-content/uploads/** rw,
+        {{ wordpress_path }}/wp-content/cache/ rw,
+        {{ wordpress_path }}/wp-content/cache/** rw,
 
         # Log files
         /var/log/apache2/ rw,
@@ -334,8 +332,8 @@
         /usr/bin/mysql rix,
 
         # WordPress directories - full access for WP-CLI
-        {{ wordpress_install_dir }}/ rw,
-        {{ wordpress_install_dir }}/** rw,
+        {{ wordpress_path }}/ rw,
+        {{ wordpress_path }}/** rw,
 
         # Temporary directories
         /tmp/ rw,
@@ -394,7 +392,6 @@
     - apparmor_enabled | default(false)
     - wordpress_apparmor_mode == "complain"
   become: true
-  changed_when: true
   failed_when: false
 
 - name: Configure AppArmor enforce mode for production
@@ -409,7 +406,6 @@
     - apparmor_enabled | default(false)
     - wordpress_apparmor_mode == "enforce"
   become: true
-  changed_when: true
   failed_when: false
 
 - name: Install AppArmor log analyzer
@@ -484,12 +480,12 @@
       echo "=== Common WordPress AppArmor Issues and Fixes ==="
       echo ""
       echo "1. PHP-FPM can't access WordPress files:"
-      echo "   - Check file permissions: ls -la {{ wordpress_install_dir }}"
+      echo "   - Check file permissions: ls -la {{ wordpress_path }}"
       echo "   - Ensure WordPress files are owned by www-data"
       echo "   - Add custom rules to /etc/apparmor.d/local/wordpress-php-fpm"
       echo ""
       echo "2. Web server can't serve static files:"
-      echo "   - Check Nginx/Apache profile allows read access to {{ wordpress_install_dir }}"
+      echo "   - Check Nginx/Apache profile allows read access to {{ wordpress_path }}"
       echo "   - Verify SSL certificate paths in profile"
       echo ""
       echo "3. WP-CLI operations failing:"
@@ -534,10 +530,6 @@
     - restart auditd
 
 - name: Validate AppArmor profiles
-  when:
-    - ansible_os_family == "Debian"
-    - apparmor_enabled | default(false)
-    - wordpress_apparmor_validate | default(true)
   block:
     - name: Check AppArmor profile syntax
       ansible.builtin.command: apparmor_parser -T {{ item }}
@@ -565,7 +557,6 @@
         - /etc/apparmor.d/wordpress-wpcli
       when: wordpress_apparmor_load_profiles | default(true)
       become: true
-      changed_when: true
       failed_when: false
 
     - name: Check loaded profiles status
@@ -576,3 +567,7 @@
     - name: Display loaded AppArmor profiles
       ansible.builtin.debug:
         msg: "{{ apparmor_loaded_status.stdout_lines | select('match', '.*wordpress.*') | list }}"
+  when:
+    - ansible_os_family == "Debian"
+    - apparmor_enabled | default(false)
+    - wordpress_apparmor_validate | default(true)

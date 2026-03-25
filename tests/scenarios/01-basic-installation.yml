@@ -90,12 +90,11 @@
         activate: false
 
   roles:
-    - role: ../../
-      become: true
+    - ansible-wordpress-enterprise
 
   post_tasks:
     - name: Wait for services to be ready
-      ansible.builtin.wait_for:
+      wait_for:
         port: "{{ wordpress_http_port }}"
         host: "{{ ansible_default_ipv4.address }}"
         delay: 10
@@ -103,7 +102,7 @@
       delegate_to: localhost
 
     - name: Test WordPress installation
-      ansible.builtin.uri:
+      uri:
         url: "http://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -111,7 +110,7 @@
       register: wp_response
 
     - name: Display test results
-      ansible.builtin.debug:
+      debug:
         msg:
           - "✅ WordPress installation test completed"
           - "✅ Site accessible at: http://{{ ansible_default_ipv4.address }}"

@@ -103,13 +103,26 @@ vault_oci_fingerprint: "your:key:fingerprint"
 vault_oci_region: "us-ashburn-1"
 vault_oci_namespace: "your-namespace"
 
+# OCI Compute Instance Provisioning
+vault_oci_compartment_id: "ocid1.compartment.oc1..your-compartment-id"
+vault_oci_availability_domain: "AD-1"
+vault_oci_subnet_id: "ocid1.subnet.oc1.your-region.your-subnet-id"
+vault_oci_vcn_id: "ocid1.vcn.oc1.your-region.your-vcn-id"
+
 # OCI Database
 vault_oci_db_host: "your-db.oraclecloud.com"
 vault_oci_db_user: "ADMIN"
 vault_oci_db_password: "your-oci-db-password"
 
+# OCI Block Storage
+vault_oci_block_volume_id: "ocid1.volume.oc1.your-region.your-volume-id"
+
+# OCI Load Balancer
+vault_oci_lb_id: "ocid1.loadbalancer.oc1.your-region.your-lb-id"
+
 # OCI Object Storage
 vault_oci_bucket_name: "wordpress-media"
+vault_oci_backup_bucket_name: "wordpress-backups"
 
 # ============================================================================
 # AWS (Compatible)

@@ -1,13 +1,6 @@
 ---
 # Prerequisites tasks for WordPress installation
 
-- name: Load OS-specific variables
-  ansible.builtin.include_vars: "{{ item }}"
-  with_first_found:
-    - "{{ ansible_os_family }}.yml"
-    - "default.yml"
-  tags: [always]
-
 - name: Update package cache (Debian/Ubuntu)
   ansible.builtin.apt:
     update_cache: true
@@ -22,7 +15,6 @@
 - name: Install basic packages (Debian/Ubuntu)
   ansible.builtin.apt:
     name:
-      - apt-utils
       - curl
       - wget
       - unzip
@@ -32,16 +24,7 @@
       - gnupg
       - lsb-release
     state: present
-  environment:
-    DEBIAN_FRONTEND: noninteractive
   when: ansible_os_family == "Debian"
-
-- name: Remove curl-minimal to avoid conflicts (RedHat/CentOS)
-  ansible.builtin.dnf:
-    name: curl-minimal
-    state: absent
-  when: ansible_os_family == "RedHat"
-  failed_when: false
 
 - name: Install basic packages (RedHat/CentOS)
   ansible.builtin.dnf:
@@ -53,7 +36,6 @@
       - ca-certificates
       - gnupg2
     state: present
-    allowerasing: true
   when: ansible_os_family == "RedHat"
 
 - name: Create WordPress system user

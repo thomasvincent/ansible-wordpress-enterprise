@@ -85,16 +85,15 @@
 
   pre_tasks:
     - name: Test input validation functionality
-      ansible.builtin.include_tasks: ../tasks/validate.yml
+      include_tasks: ../tasks/validate.yml
       tags: validation
 
   roles:
-    - role: ../../
-      become: true
+    - ansible-wordpress-enterprise
 
   post_tasks:
     - name: Wait for HTTPS services to be ready
-      ansible.builtin.wait_for:
+      wait_for:
         port: "{{ wordpress_https_port }}"
         host: "{{ ansible_default_ipv4.address }}"
         delay: 20
@@ -102,7 +101,7 @@
       delegate_to: localhost
 
     - name: Test HTTPS redirect
-      ansible.builtin.uri:
+      uri:
         url: "http://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -111,7 +110,7 @@
       register: http_response
 
     - name: Test HTTPS access (with self-signed cert)
-      ansible.builtin.uri:
+      uri:
         url: "https://{{ ansible_default_ipv4.address }}"
         method: GET
         status_code: [200, 301, 302]
@@ -120,7 +119,7 @@
       register: https_response
 
     - name: Check PHP security headers
-      ansible.builtin.uri:
+      uri:
         url: "https://{{ ansible_default_ipv4.address }}"
         method: GET
         validate_certs: false
@@ -129,7 +128,7 @@
       register: security_headers
 
     - name: Test admin area security
-      ansible.builtin.uri:
+      uri:
         url: "https://{{ ansible_default_ipv4.address }}/wp-admin/"
         method: GET
         status_code: [200, 301, 302]
@@ -138,7 +137,7 @@
       register: admin_security
 
     - name: Check for security plugin installation
-      ansible.builtin.uri:
+      uri:
         url: "https://{{ ansible_default_ipv4.address }}/wp-admin/admin.php?page=WFLS"
         method: GET
         status_code: [200, 301, 302, 404]  # 404 is OK if redirect
@@ -148,7 +147,7 @@
       ignore_errors: true
 
     - name: Verify SSL certificate (self-signed)
-      ansible.builtin.command: >
+      command: >
         openssl s_client -connect {{ ansible_default_ipv4.address }}:443
         -servername {{ ansible_default_ipv4.address }} -verify_return_error
       delegate_to: localhost
@@ -157,12 +156,12 @@
       changed_when: false
 
     - name: Check file permissions security
-      ansible.builtin.stat:
+      stat:
         path: "{{ wordpress_install_dir }}/wp-config.php"
       register: wpconfig_perms
 
     - name: Display security test results
-      ansible.builtin.debug:
+      debug:
         msg:
           - "🔒 Security and Validation test completed"
           - "🔒 HTTPS accessible: {{ 'Yes' if https_response.status == 200 else 'Redirect' }}"

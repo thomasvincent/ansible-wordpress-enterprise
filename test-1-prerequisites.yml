@@ -14,10 +14,10 @@
 
   tasks:
     - name: Test Prerequisites Installation
-      ansible.builtin.include_tasks: tasks/prerequisites.yml
+      include_tasks: tasks/prerequisites.yml
 
     - name: Verify basic packages are installed
-      ansible.builtin.command: which {{ item }}
+      command: which {{ item }}
       loop:
         - curl
         - wget
@@ -27,7 +27,7 @@
       changed_when: false
 
     - name: Display test results
-      ansible.builtin.debug:
+      debug:
         msg:
           - "✅ Prerequisites test completed successfully!"
           - "✅ All basic packages are installed"
