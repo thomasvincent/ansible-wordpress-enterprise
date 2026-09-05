@@ -64,6 +64,12 @@
     state: restarted
   become: true
 
+- name: Reload firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: reloaded
+  become: true
+
 - name: Restart fail2ban
   ansible.builtin.systemd:
     name: fail2ban
@@ -89,6 +95,20 @@
     state: reloaded
   become: true
   when: ansible_facts.os_family == "Debian"
+
+- name: Reload sysctl
+  ansible.builtin.command:
+    cmd: sysctl --system
+  become: true
+  changed_when: false
+
+- name: Restart yum-cron
+  ansible.builtin.systemd:
+    name: yum-cron
+    state: restarted
+    enabled: true
+  become: true
+  when: ansible_facts.os_family == "RedHat"
 
 - name: Restart dnf-automatic timer
   ansible.builtin.systemd:

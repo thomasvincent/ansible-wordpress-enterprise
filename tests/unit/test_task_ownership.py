@@ -43,6 +43,15 @@ PARTIAL = {
 # destination between them can never be written twice in one run.
 EXCLUSIVE_FILES = ({"webserver_apache.yml", "webserver_nginx.yml"},)
 
+# These files are deliberately rendered once and then extended with optional
+# settings. Their partial writers use distinct discriminators checked below.
+WHOLE_PARTIAL_ALLOWED = {
+    "{{expr:'/etc/redis/redis.conf' if ansible_facts.os_family == 'Debian' else '/etc/redis.conf'}}",
+    "/etc/fail2ban/jail.local",
+    "{{wordpress_php_fpm_pool_path}}",
+    "{{wordpress_install_dir}}/wp-config.php",
+}
+
 VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][\w.]*)")
 
 
@@ -90,10 +99,15 @@ def _normalise(target: str) -> str:
     return re.sub(r"\{\{.*?\}\}", one, collapsed)
 
 
-def _constraint(cond) -> tuple[str, str, str] | None:
+def _constraint(cond) -> tuple[str, str, str, str | None] | None:
     m = re.fullmatch(
-        r"\s*([\w.]+)\s*(?:\|[^=!]*?)?\s*(==|!=)\s*[\"']([^\"']+)[\"']\s*", str(cond))
-    return (m.group(1), m.group(2), m.group(3)) if m else None
+        r"""\s*([\w.]+)
+            (?:\s*\|\s*default\(\s*["']([^"']+)["']\s*\))?
+            \s*(==|!=)\s*["']([^"']+)["']\s*""",
+        str(cond),
+        re.VERBOSE,
+    )
+    return (m.group(1), m.group(3), m.group(4), m.group(2)) if m else None
 
 
 def _exclusive(conditions: list[tuple]) -> bool:
@@ -109,7 +123,7 @@ def _exclusive(conditions: list[tuple]) -> bool:
         for cond in group:
             c = _constraint(cond)
             if c:
-                found.setdefault(c[0], set()).add((c[1], c[2]))
+                found.setdefault(c[0], set()).add((c[1], c[2], c[3]))
         per_writer.append(found)
 
     variables = set(per_writer[0]) if per_writer else set()
@@ -121,11 +135,13 @@ def _exclusive(conditions: list[tuple]) -> bool:
         if any(len(c) != 1 for c in constraints):
             continue
         flat = [next(iter(c)) for c in constraints]
-        equalities = [v for op, v in flat if op == "=="]
+        if len({default for _, _, default in flat}) != 1:
+            continue
+        equalities = [v for op, v, _ in flat if op == "=="]
         if len(equalities) == len(flat) and len(set(equalities)) == len(flat):
             return True
         if len(flat) == 2:
-            (op_a, val_a), (op_b, val_b) = flat
+            (op_a, val_a, _), (op_b, val_b, _) = flat
             if {op_a, op_b} == {"==", "!="} and val_a == val_b:
                 return True
     return False
@@ -151,7 +167,15 @@ def test_cron_entry_names_are_owned_by_one_task(all_tasks) -> None:
 
 
 def _destinations(all_tasks):
+    all_tasks = list(all_tasks)
     owners = collections.defaultdict(list)
+    whole_targets = {
+        _normalise(task[module][key])
+        for _, task, _ in all_tasks
+        for module, key in WHOLE_FILE.items()
+        if isinstance(task.get(module), dict)
+        and isinstance(task[module].get(key), str)
+    }
     for filename, task, when in all_tasks:
         label = f"{filename}:{task.get('name')}"
         for module, key in WHOLE_FILE.items():
@@ -163,9 +187,33 @@ def _destinations(all_tasks):
             if not isinstance(body, dict) or not isinstance(body.get(key), str):
                 continue
             edit = tuple(str(body.get(d)) for d in discriminators)
-            if any("item" in part for part in edit):
-                edit += (str(task.get("loop") or task.get("with_items")),)
-            owners[f"{_normalise(body[key])}!{edit}"].append((label, filename, when))
+            edits = [edit]
+            loop = task.get("loop")
+            if any("item" in part for part in edit) and isinstance(loop, list):
+                edits = []
+                for item in loop:
+                    rendered = []
+                    for part in edit:
+                        if isinstance(item, dict):
+                            part = re.sub(
+                                r"\{\{\s*item\.([A-Za-z_]\w*)\s*\}\}",
+                                lambda match: str(item.get(match.group(1))),
+                                part,
+                            )
+                        else:
+                            part = re.sub(r"\{\{\s*item\s*\}\}", str(item), part)
+                        rendered.append(part)
+                    edits.append(tuple(rendered))
+            target = _normalise(body[key])
+            crosses_whole_writer = (
+                target in whole_targets and target not in WHOLE_PARTIAL_ALLOWED
+            )
+            for resolved_edit in edits:
+                owner_key = (
+                    target if crosses_whole_writer
+                    else f"{target}!{resolved_edit}"
+                )
+                owners[owner_key].append((label, filename, when))
     return owners
 
 
@@ -176,7 +224,7 @@ def test_written_destinations_are_owned_by_one_task(all_tasks) -> None:
         if len(writers) < 2:
             continue
         files = {f for _, f, _ in writers}
-        if any(files == pair for pair in EXCLUSIVE_FILES):
+        if len(writers) == len(files) and any(files == pair for pair in EXCLUSIVE_FILES):
             continue
         if _exclusive([c for _, _, c in writers]):
             continue
@@ -338,3 +386,66 @@ def test_complementary_conditions_are_exclusive() -> None:
 
 def test_writers_constrained_on_different_variables_are_not_exclusive() -> None:
     assert not _exclusive([("a == 'x'",), ("b == 'y'",)])
+
+
+def test_filtered_conditions_are_not_assumed_exclusive() -> None:
+    assert not _exclusive([("x | lower == 'a'",), ("x == 'A'",)])
+    assert not _exclusive([
+        ("x | default('a') == 'a'",),
+        ("x | default('b') == 'b'",),
+    ])
+
+
+def test_file_pair_exemption_does_not_hide_an_intra_file_clash() -> None:
+    tasks = [
+        ("webserver_nginx.yml", {"name": "One", "ansible.builtin.copy": {"dest": "/x"}}, ()),
+        ("webserver_nginx.yml", {"name": "Two", "ansible.builtin.copy": {"dest": "/x"}}, ()),
+        ("webserver_apache.yml", {"name": "Three", "ansible.builtin.copy": {"dest": "/x"}}, ()),
+    ]
+    with pytest.raises(AssertionError, match="/x"):
+        test_written_destinations_are_owned_by_one_task(tasks)
+
+
+def test_whole_file_and_partial_writers_clash() -> None:
+    tasks = _synthetic("""
+- name: Whole
+  ansible.builtin.template: {src: a.j2, dest: /etc/thing.conf}
+- name: Partial
+  ansible.builtin.lineinfile: {path: /etc/thing.conf, regexp: '^x', line: 'x=1'}
+""")
+    with pytest.raises(AssertionError, match="/etc/thing.conf"):
+        test_written_destinations_are_owned_by_one_task(tasks)
+
+
+def test_overlapping_loop_driven_partial_writers_clash() -> None:
+    tasks = _synthetic("""
+- name: First
+  ansible.builtin.lineinfile:
+    path: /etc/thing.conf
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}={{ item.value }}'
+  loop:
+    - {key: shared, value: one}
+    - {key: first, value: one}
+- name: Second
+  ansible.builtin.lineinfile:
+    path: /etc/thing.conf
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}={{ item.value }}'
+  loop:
+    - {value: two, key: shared}
+    - {value: two, key: second}
+""")
+    with pytest.raises(AssertionError, match="shared"):
+        test_written_destinations_are_owned_by_one_task(tasks)
+
+
+def test_cron_guard_reports_duplicate_names() -> None:
+    tasks = _synthetic("""
+- name: First
+  ansible.builtin.cron: {name: duplicate, job: /bin/true}
+- name: Second
+  ansible.builtin.cron: {name: duplicate, job: /bin/false}
+""")
+    with pytest.raises(AssertionError, match="duplicate"):
+        test_cron_entry_names_are_owned_by_one_task(tasks)

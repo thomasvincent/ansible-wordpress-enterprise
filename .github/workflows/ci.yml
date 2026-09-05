@@ -55,7 +55,7 @@ jobs:
   molecule-test:
     name: Molecule Test (${{ matrix.name }})
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 20  # Prevent hung jobs
+    timeout-minutes: 45  # Full multi-platform converge and idempotence takes over 20 minutes
     needs: lint
     strategy:
       fail-fast: false

@@ -190,22 +190,6 @@
   when: wordpress_nginx_status_page | default(false)
   notify: Reload nginx
 
-- name: Set Nginx worker processes based on CPU cores
-  ansible.builtin.lineinfile:
-    path: /etc/nginx/nginx.conf
-    regexp: '^worker_processes'
-    line: "worker_processes {{ ansible_facts.processor_vcpus | default('auto') }};"
-  become: true
-  notify: Reload nginx
-
-- name: Optimize Nginx worker connections
-  ansible.builtin.lineinfile:
-    path: /etc/nginx/nginx.conf
-    regexp: '^(\s*)worker_connections'
-    line: "\tworker_connections {{ wordpress_nginx_worker_connections | default('1024') }};"
-  become: true
-  notify: Reload nginx
-
 - name: Test Nginx configuration
   ansible.builtin.command:
     cmd: nginx -t

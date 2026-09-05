@@ -590,7 +590,9 @@ EOF
     touch "$test_file"
     chmod 000 "$test_file"
 
-    if [[ -r "$test_file" ]]; then
+    # This suite runs as root inside the provisioned target; root's -r check
+    # ignores mode bits. Verify readability as an unprivileged account.
+    if runuser -u nobody -- test -r "$test_file"; then
         test_fail "Invalid permissions test should not be readable"
     else
         test_pass "Invalid permissions correctly prevent reading"
