@@ -51,6 +51,16 @@ PARTIAL = {
     "community.general.ini_file": ("path", ("section", "option")),
 }
 
+WP_CONFIG_WRITERS = {
+    "ansible.builtin.file": "path",
+    "ansible.builtin.template": "dest",
+    "ansible.builtin.copy": "dest",
+    "ansible.builtin.lineinfile": "path",
+    "ansible.builtin.blockinfile": "path",
+    "ansible.builtin.replace": "path",
+    "community.general.ini_file": "path",
+}
+
 # main.yml includes these under mutually exclusive conditions, so a shared
 # destination between them can never be written twice in one run.
 EXCLUSIVE_FILES = ({"webserver_apache.yml", "webserver_nginx.yml"},)
@@ -323,14 +333,6 @@ def _wp_config_modes(all_tasks) -> set[str]:
     all_tasks = list(all_tasks)
     target = "{{wordpress_install_dir}}/wp-config.php"
     install_root = "{{wordpress_install_dir}}"
-    mode_modules = {
-        "ansible.builtin.file": "path",
-        "ansible.builtin.template": "dest",
-        "ansible.builtin.copy": "dest",
-        "ansible.builtin.lineinfile": "path",
-        "ansible.builtin.blockinfile": "path",
-        "ansible.builtin.replace": "path",
-    }
     safe_dynamic_file_lists = set()
     for _, task, _ in all_tasks:
         find = task.get("ansible.builtin.find")
@@ -346,7 +348,7 @@ def _wp_config_modes(all_tasks) -> set[str]:
             safe_dynamic_file_lists.add(register)
     modes = set()
     for _, task, _ in all_tasks:
-        for module, destination in mode_modules.items():
+        for module, destination in WP_CONFIG_WRITERS.items():
             body = task.get(module)
             if not isinstance(body, dict) or not isinstance(body.get(destination), str):
                 continue
@@ -396,18 +398,37 @@ def _wp_config_modes(all_tasks) -> set[str]:
                         or install_literal.startswith(f"{destination_literal}/")
                     )
                 )
-                writes_config = destination_symbolic == target or recursively_reaches_config
+                direct_config = (
+                    destination_symbolic == target
+                    or destination_literal == f"{install_literal}/wp-config.php"
+                    or bool(re.fullmatch(
+                        r"\{\{wordpress_\w*(?:dir|path)\}\}/wp-config\.php",
+                        destination_symbolic,
+                    ))
+                )
+                writes_config = direct_config or recursively_reaches_config
                 if writes_config and mode is not None:
                     modes.add(_normalise_file_value(mode))
         for module in ("ansible.builtin.command", "ansible.builtin.shell"):
             command = _command_text(task, module)
             if "wp-config.php" not in command:
                 continue
+            if re.search(
+                r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
+                command,
+            ):
+                continue
             chmod_mode = re.search(r"\bchmod\b(?:\s+-\S+)*\s+([0-7]{3,4})\b", command)
             install_mode = re.search(r"\binstall\b.*?\s-m\s+([0-7]{3,4})\b", command)
             mode_match = chmod_mode or install_mode
             if mode_match:
                 modes.add(mode_match.group(1).lstrip("0").zfill(4))
+                continue
+            variable_mode = re.search(
+                r"\b(?:chmod|install\s+-m)\b.*?\{\{\s*([A-Za-z_]\w*)", command
+            )
+            if variable_mode and variable_mode.group(1) in DEFAULT_VALUES:
+                modes.add(_normalise_file_value(f"{{{{ {variable_mode.group(1)} }}}}"))
     return modes
 
 
@@ -435,23 +456,27 @@ def _unsafe_wp_config_sweeps(all_tasks) -> list[str]:
             "ansible.builtin.script",
         ):
             command = _command_text(task, module)
-            for statement in re.split(r"\s*(?:(?<!\\);|&&|\|\|)\s*", command):
+            for statement in re.split(r"\s*(?:(?<!\\);|&&|\|\||\n)\s*", command):
                 recursive_chmod = "chmod" in statement and re.search(
                     r"(?:^|\s)(?:--recursive|-\S*R\S*)(?:\s|$)", statement
-                )
-                find_chmod = "find " in statement and "chmod" in statement
-                touches_files = bool(recursive_chmod) or (
-                    find_chmod and ("-type f" in statement or "-type d" not in statement)
                 )
                 reaches_tree = install_root in statement or re.search(
                     r"\{\{\s*wordpress_\w*(?:dir|path)\b", statement
                 )
-                excludes_config_family = re.search(
-                    r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
-                    statement,
-                )
-                if touches_files and reaches_tree and not excludes_config_family:
-                    unsafe.append(f"{filename}:{task.get('name')}")
+                find_chmod = "find " in statement and "chmod" in statement
+                candidates = [statement]
+                if find_chmod and "-type " in statement:
+                    candidates = re.split(r"(?=-type\s+[df]\b)", statement)
+                for candidate in candidates:
+                    candidate_chmods_files = "chmod" in candidate and "-type d" not in candidate
+                    touches_files = bool(recursive_chmod) or candidate_chmods_files
+                    excludes_config_family = re.search(
+                        r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
+                        candidate,
+                    )
+                    if touches_files and reaches_tree and not excludes_config_family:
+                        unsafe.append(f"{filename}:{task.get('name')}")
+                        break
     return unsafe
 
 
@@ -459,12 +484,7 @@ def _wp_config_backup_writers(all_tasks) -> list[str]:
     target = "{{wordpress_install_dir}}/wp-config.php"
     writers = []
     for filename, task, _ in all_tasks:
-        for module, destination in {
-            "ansible.builtin.template": "dest",
-            "ansible.builtin.lineinfile": "path",
-            "ansible.builtin.blockinfile": "path",
-            "ansible.builtin.replace": "path",
-        }.items():
+        for module, destination in WP_CONFIG_WRITERS.items():
             body = task.get(module)
             if (
                 isinstance(body, dict)
@@ -491,7 +511,11 @@ def test_wp_config_has_no_in_place_backups(all_tasks) -> None:
 
 
 def test_wp_config_is_excluded_from_permission_sweeps(all_tasks) -> None:
-    unsafe_sweeps = _unsafe_wp_config_sweeps(all_tasks)
+    handler_tasks = [
+        ("handlers/main.yml", task, when)
+        for task, when in _walk(yaml.safe_load((ROOT / "handlers" / "main.yml").read_text()))
+    ]
+    unsafe_sweeps = _unsafe_wp_config_sweeps([*all_tasks, *handler_tasks])
     assert not unsafe_sweeps, f"chmod sweeps include wp-config.php: {unsafe_sweeps}"
 
 
@@ -501,6 +525,21 @@ def test_wp_config_guard_detects_an_unsafe_template() -> None:
   ansible.builtin.template:
     src: wp-config.php.j2
     dest: '{{ wordpress_install_dir }}/wp-config.php'
+    mode: '0644'
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
+
+
+@pytest.mark.parametrize(
+    "destination",
+    ["/var/www/wordpress/wp-config.php", "{{ wordpress_path }}/wp-config.php"],
+)
+def test_wp_config_guard_detects_config_path_spellings(destination: str) -> None:
+    tasks = _synthetic(f"""
+- name: Unsafe alternate config path
+  ansible.builtin.copy:
+    content: test
+    dest: '{destination}'
     mode: '0644'
 """)
     assert _wp_config_modes(tasks) == {"0644"}
@@ -615,11 +654,19 @@ def test_wp_config_guard_detects_unsafe_partial_writer_mode(module: str) -> None
     assert _wp_config_modes(tasks) == {"0644"}
 
 
-def test_wp_config_guard_rejects_in_place_backups() -> None:
-    tasks = _synthetic("""
+@pytest.mark.parametrize(
+    ("module", "destination"),
+    [
+        ("ansible.builtin.blockinfile", "path"),
+        ("ansible.builtin.copy", "dest"),
+        ("community.general.ini_file", "path"),
+    ],
+)
+def test_wp_config_guard_rejects_in_place_backups(module: str, destination: str) -> None:
+    tasks = _synthetic(f"""
 - name: Unsafe backup
-  ansible.builtin.blockinfile:
-    path: '{{ wordpress_install_dir }}/wp-config.php'
+  {module}:
+    {destination}: '{{{{ wordpress_install_dir }}}}/wp-config.php'
     block: test
     backup: true
 """)
@@ -680,6 +727,37 @@ def test_wp_config_guard_detects_direct_command_modes(command: str) -> None:
   ansible.builtin.command: {command}
 """)
     assert _wp_config_modes(tasks) == {"0644"}
+
+
+def test_wp_config_guard_resolves_direct_command_mode_variable() -> None:
+    tasks = _synthetic("""
+- name: Variable direct mode
+  ansible.builtin.command: >-
+    chmod {{ wordpress_file_permissions }}
+    {{ wordpress_install_dir }}/wp-config.php
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
+
+
+def test_exclusion_on_one_shell_line_does_not_exempt_another() -> None:
+    tasks = _synthetic("""
+- name: Multiline unsafe sweep
+  ansible.builtin.shell: |
+    find {{ wordpress_install_dir }} -type f ! -name 'wp-config.php*' -exec chmod 0644 {} +
+    chmod -R 0666 {{ wordpress_install_dir }}
+""")
+    assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Multiline unsafe sweep"]
+
+
+def test_directory_branch_exclusion_does_not_exempt_file_branch() -> None:
+    tasks = _synthetic("""
+- name: Wrong-branch exclusion
+  ansible.builtin.command: >-
+    find {{ wordpress_install_dir }}
+    ( -type d ! -name 'wp-config.php*' -exec chmod 0755 {} + )
+    -o ( -type f -exec chmod 0644 {} + )
+""")
+    assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Wrong-branch exclusion"]
 
 
 def test_written_destinations_are_owned_by_one_task(all_tasks) -> None:
