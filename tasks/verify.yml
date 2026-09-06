@@ -75,8 +75,10 @@
 
 - name: Test HTTP response
   ansible.builtin.uri:
-    url: "http://{{ ansible_facts.default_ipv4.address | default('localhost') }}"
+    url: "http://127.0.0.1/"
     method: GET
+    headers:
+      Host: "{{ wordpress_server_name }}"
     status_code: [200, 301, 302, 403]
   register: http_response
   ignore_errors: true
@@ -342,8 +344,10 @@
 
 - name: Test WordPress URL response
   ansible.builtin.uri:
-    url: "{{ wordpress_site_url }}"
+    url: "http://127.0.0.1/"
     method: GET
+    headers:
+      Host: "{{ wordpress_server_name }}"
     status_code: [200, 301, 302]
     validate_certs: false
   register: wp_url_response

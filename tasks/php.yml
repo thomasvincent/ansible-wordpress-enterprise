@@ -1,4 +1,26 @@
 ---
+- name: Trust the Remi signing key for Enterprise Linux 9
+  ansible.builtin.rpm_key:
+    key: https://rpms.remirepo.net/RPM-GPG-KEY-remi2021
+    state: present
+  when: ansible_facts.os_family == "RedHat"
+  become: true
+
+- name: Install the Remi PHP repository for Enterprise Linux
+  ansible.builtin.dnf:
+    name: "{{ wordpress_remi_repo_url }}"
+    state: present
+  when: ansible_facts.os_family == "RedHat"
+  become: true
+
+- name: Enable the requested Remi PHP stream
+  ansible.builtin.command:
+    cmd: "dnf module enable php:remi-{{ wordpress_php_version }} -y"
+  register: wordpress_php_stream
+  changed_when: "'Nothing to do' not in wordpress_php_stream.stdout"
+  when: ansible_facts.os_family == "RedHat"
+  become: true
+
 - name: Install PHP packages for Debian/Ubuntu
   ansible.builtin.apt:
     name:
@@ -173,50 +195,12 @@
   become: true
   notify: Restart php-fpm
 
-- name: Configure PHP-FPM pool advanced settings
-  ansible.builtin.lineinfile:
-    path: "{{ wordpress_php_fpm_pool_path }}"
-    regexp: "^{{ item.key }} ="
-    line: "{{ item.key }} = {{ item.value }}"
-    state: present
-  loop:
-    - { key: "pm.max_children", value: '{{ wordpress_php_fpm_max_children | default("50") }}' }
-    - { key: "pm.start_servers", value: '{{ wordpress_php_fpm_start_servers | default("5") }}' }
-    - { key: "pm.min_spare_servers", value: '{{ wordpress_php_fpm_min_spare_servers | default("5") }}' }
-    - { key: "pm.max_spare_servers", value: '{{ wordpress_php_fpm_max_spare_servers | default("35") }}' }
-    - { key: "pm.max_requests", value: '{{ wordpress_php_fpm_max_requests | default("1000") }}' }
-    - { key: "pm.process_idle_timeout", value: '{{ wordpress_php_fpm_process_idle_timeout | default("10s") }}' }
-    - key: "request_terminate_timeout"
-      value: '{{ wordpress_php_fpm_request_terminate_timeout | default("300") }}'
-    - { key: "rlimit_files", value: '{{ wordpress_php_fpm_rlimit_files | default("65536") }}' }
-    - { key: "rlimit_core", value: '{{ wordpress_php_fpm_rlimit_core | default("0") }}' }
-  become: true
-  notify: Restart php-fpm
-
-- name: Enable PHP-FPM status page
-  ansible.builtin.lineinfile:
-    path: "{{ wordpress_php_fpm_pool_path }}"
-    regexp: "^;?pm.status_path"
-    line: "pm.status_path = /status"
-    state: present
-  become: true
-  when: wordpress_php_fpm_status_page | default(false)
-  notify: Restart php-fpm
-
-- name: Enable PHP-FPM ping page
-  ansible.builtin.lineinfile:
-    path: "{{ wordpress_php_fpm_pool_path }}"
-    regexp: "^;?ping.path"
-    line: "ping.path = /ping"
-    state: present
-  become: true
-  when: wordpress_php_fpm_ping_page | default(false)
-  notify: Restart php-fpm
-
 - name: Create PHP error log file
   ansible.builtin.file:
     path: "{{ wordpress_php_error_log | default('/var/log/php_errors.log') }}"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ wordpress_php_fpm_user }}"
     group: "{{ wordpress_php_fpm_group }}"
     mode: "0644"
@@ -260,6 +244,7 @@
     state: directory
     mode: "0755"
   become: true
+  when: wordpress_php_fpm_systemd_overrides | default({}) | length > 0
 
 - name: Configure PHP-FPM systemd overrides
   ansible.builtin.template:

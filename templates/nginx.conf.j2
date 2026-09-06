@@ -28,12 +28,6 @@ http {
     default_type application/octet-stream;
 
     ##
-    # SSL Settings
-    ##
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-
-    ##
     # Logging Settings
     ##
     log_format main '$remote_addr - $remote_user [$time_local] "$request" '
@@ -49,18 +43,4 @@ http {
     include /etc/nginx/conf.d/*.conf;
     include /etc/nginx/sites-enabled/*;
 
-    ##
-    # Buffer sizes
-    ##
-    client_max_body_size {{ wordpress_nginx_client_max_body_size | default('64M') }};
-    client_body_buffer_size {{ wordpress_nginx_client_body_buffer_size | default('128k') }};
-    client_header_buffer_size {{ wordpress_nginx_client_header_buffer_size | default('1k') }};
-    large_client_header_buffers {{ wordpress_nginx_large_client_header_buffers | default('4 4k') }};
-
-    ##
-    # Rate limiting
-    ##
-    {% if wordpress_nginx_rate_limiting | default(false) %}
-    limit_req_zone $binary_remote_addr zone=wp_limit:10m rate={{ wordpress_nginx_rate_limit | default('10r/m') }};
-    {% endif %}
 }

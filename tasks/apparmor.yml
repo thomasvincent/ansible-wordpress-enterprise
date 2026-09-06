@@ -375,6 +375,8 @@
   ansible.builtin.file:
     path: "/etc/apparmor.d/local/{{ item }}"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     mode: "0644"
   loop:
     - wordpress-php-fpm

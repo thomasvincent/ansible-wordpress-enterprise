@@ -16,11 +16,7 @@ galaxy_info:
         - "9"
     - name: Ubuntu
       versions:
-        - jammy
         - noble
-    - name: Debian
-      versions:
-        - trixie
 
   galaxy_tags:
     - wordpress

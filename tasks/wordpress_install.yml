@@ -1,6 +1,11 @@
 ---
 # WordPress Installation Tasks
 
+- name: Check whether WordPress core is already present
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-includes/version.php"
+  register: wordpress_core_present
+
 - name: Create WordPress installation directory
   ansible.builtin.file:
     path: "{{ wordpress_install_dir }}"
@@ -16,6 +21,7 @@
     state: directory
     mode: '0755'
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Download WordPress
   ansible.builtin.get_url:
@@ -25,7 +31,9 @@
     timeout: 300
   become: true
   register: wordpress_download
-  when: wordpress_version != "latest"
+  when:
+    - wordpress_version != "latest"
+    - not wordpress_core_present.stat.exists
   # wordpress.org rate-limits, and several hosts converging at once from one
   # address is enough to trigger it.
   retries: 5
@@ -40,7 +48,9 @@
     timeout: 300
   become: true
   register: wordpress_download_latest
-  when: wordpress_version == "latest"
+  when:
+    - wordpress_version == "latest"
+    - not wordpress_core_present.stat.exists
   retries: 5
   delay: 10
   until: wordpress_download_latest is succeeded
@@ -53,6 +63,7 @@
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Check if WordPress is already installed
   ansible.builtin.stat:
@@ -68,7 +79,7 @@
     group: "{{ wordpress_system_group }}"
     mode: preserve
   become: true
-  when: not wordpress_installed.stat.exists
+  when: not wordpress_core_present.stat.exists
 
 - name: Set proper ownership for WordPress files
   ansible.builtin.file:
@@ -78,20 +89,6 @@
     group: "{{ wordpress_system_group }}"
     recurse: true
   become: true
-
-# A WordPress tree is ~3.8k files, and one file task per path meant roughly
-# that many module round trips per host. find -exec ... + does it in two.
-- name: Apply WordPress directory and file permissions
-  ansible.builtin.command:
-    cmd: >-
-      find {{ wordpress_install_dir | quote }}
-      ( -type d ! -perm {{ wordpress_dir_permissions }} -print
-        -exec chmod {{ wordpress_dir_permissions }} {} + )
-      -o ( -type f ! -perm {{ wordpress_file_permissions }} -print
-        -exec chmod {{ wordpress_file_permissions }} {} + )
-  become: true
-  register: wordpress_permission_sweep
-  changed_when: wordpress_permission_sweep.stdout | length > 0
 
 - name: Create wp-content uploads directory
   ansible.builtin.file:
@@ -163,6 +160,8 @@
   ansible.builtin.file:
     path: "{{ wordpress_error_log }}"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ wordpress_php_fpm_user }}"
     group: "{{ wordpress_php_fpm_group }}"
     mode: '0644'
@@ -194,6 +193,7 @@
     path: "/tmp/wordpress-download"
     state: absent
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Check WordPress installation status
   ansible.builtin.stat:

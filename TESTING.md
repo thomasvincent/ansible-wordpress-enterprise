@@ -1,337 +1,109 @@
 # Testing Guide
 
-This document describes how to test the ansible-wordpress-enterprise role using Molecule.
+This role uses Molecule with Docker for its stable release contract.
 
-## Overview
+## Stable matrix
 
-The role uses [Molecule](https://molecule.readthedocs.io/) as the testing framework with Docker as the driver. Tests are organized into multiple scenarios to ensure comprehensive coverage across different platforms and configurations.
+The single `default` scenario provisions both supported paths from pinned
+images:
+
+| Host | Stack |
+| --- | --- |
+| `ubuntu-24-nginx` | Ubuntu 24.04, PHP 8.3, Nginx |
+| `rocky-9-apache` | Rocky Linux 9, PHP 8.2, Apache |
+
+Ubuntu 22.04 and Debian 13 are compatibility targets. Add either to the stable
+matrix only after it passes the same end-to-end contract without exceptions.
 
 ## Prerequisites
 
-### Required Tools
-
-- Python 3.8 or newer
-- Docker (for running test containers)
+- Docker with permission to run privileged systemd containers
+- `mise`
 - Git
 
-### Installation
+Install the pinned Python toolchain and Ansible collections:
 
 ```bash
-# Install testing dependencies
-pip install -r requirements.txt
-
-# Or install individually
-pip install molecule>=6.0.0
-pip install molecule-plugins[docker]>=23.5.0
-pip install ansible>=8.5.0
-pip install ansible-lint>=6.22.0
-pip install yamllint>=1.33.0
+mise install python@3.12
+mise exec python@3.12 -- python -m pip install -r requirements.txt
+mise exec python@3.12 -- ansible-galaxy collection install -r requirements.yml
 ```
 
-### Ansible Collections
+## Release contract
+
+Run the complete lifecycle:
 
 ```bash
-ansible-galaxy collection install community.general
-ansible-galaxy collection install community.mysql
-ansible-galaxy collection install ansible.posix
+mise exec python@3.12 -- molecule test --scenario-name default
 ```
 
-## Test Scenarios
+The sequence destroys stale containers, performs syntax validation, creates and
+prepares both hosts, converges the role, proves a second convergence reports
+zero changes, runs the verifier, and destroys the containers.
 
-### Default Scenario
+The verifier fails closed unless both hosts pass all of these checks:
 
-**Path:** `molecule/default/`
+- expected web server, PHP-FPM, and database services are active;
+- Apache or Nginx configuration syntax is valid;
+- the requested PHP version is installed;
+- WordPress core and its database are valid through WP-CLI;
+- `wp-config.php` is mode `0600`;
+- the configured HTTP endpoint returns status 200 and dynamic WordPress content;
+- no PHP files exist below `wp-content/uploads`.
 
-**Platforms:**
-- Ubuntu 22.04
-- Ubuntu 24.04
-- Rocky Linux 9
+## Interactive debugging
 
-**Purpose:** Quick testing across major supported platforms.
+Keep the environment between individual stages when diagnosing a failure:
 
 ```bash
-molecule test
-# or explicitly
-molecule test --scenario-name default
+mise exec python@3.12 -- molecule create --scenario-name default
+mise exec python@3.12 -- molecule prepare --scenario-name default
+mise exec python@3.12 -- molecule converge --scenario-name default
+mise exec python@3.12 -- molecule idempotence --scenario-name default
+mise exec python@3.12 -- molecule verify --scenario-name default
+mise exec python@3.12 -- molecule login --scenario-name default --host ubuntu-24-nginx
+mise exec python@3.12 -- molecule destroy --scenario-name default
 ```
 
-### Ubuntu Scenario
+Use `rocky-9-apache` as the login host when investigating the EL9 path.
 
-**Path:** `molecule/ubuntu/`
+## Static checks
 
-**Platforms:**
-- Ubuntu 22.04 (Jammy)
-- Ubuntu 24.04 (Noble)
-
-**Purpose:** Ubuntu-specific testing and validation.
+Run the same fast checks used by CI:
 
 ```bash
-molecule test --scenario-name ubuntu
+mise exec python@3.12 -- ansible-lint
+mise exec python@3.12 -- pytest -q tests/unit
+actionlint .github/workflows/ci.yml .github/workflows/security-tests.yml
 ```
 
-### Debian Scenario
+The scheduled `Security Tests` workflow reruns the complete contract daily.
+Pull requests and pushes execute the verifier through the main CI workflow, so
+the two workflows do not compete for identically named containers on the
+self-hosted runner.
 
-**Path:** `molecule/debian/`
+## Adding platform coverage
 
-**Platforms:**
-- Debian 11 (Bullseye)
-- Debian 12 (Bookworm)
+Platform support is a tested contract, not a metadata-only declaration. A new
+platform must use a pinned image and pass syntax, converge, idempotence, and the
+full verifier before it is added to `meta/platform_support.yml` and
+`meta/main.yml`.
 
-**Purpose:** Debian-specific testing and validation.
-
-```bash
-molecule test --scenario-name debian
-```
-
-### RHEL Scenario
-
-**Path:** `molecule/rhel/`
-
-**Platforms:**
-- Rocky Linux 8 (RHEL 8 compatible)
-- Rocky Linux 9 (RHEL 9 compatible)
-
-**Purpose:** RHEL/CentOS/AlmaLinux-compatible testing.
-
-```bash
-molecule test --scenario-name rhel
-```
-
-## Test Sequence
-
-Each scenario runs through the following test sequence:
-
-1. **Dependency**: Install required Ansible Galaxy collections
-2. **Cleanup**: Remove any previous test artifacts
-3. **Destroy**: Tear down any existing test containers
-4. **Syntax**: Validate Ansible playbook syntax
-5. **Create**: Create test containers
-6. **Prepare**: Prepare test containers (install Python, etc.)
-7. **Converge**: Run the role against test containers
-8. **Idempotence**: Verify role is idempotent (no changes on second run)
-9. **Verify**: Run verification tests
-10. **Cleanup**: Clean up test artifacts
-11. **Destroy**: Tear down test containers
-
-## Interactive Testing
-
-For development and debugging, you can run individual steps:
-
-```bash
-# Create test environment
-molecule create
-
-# Run the role
-molecule converge
-
-# Run verification tests
-molecule verify
-
-# Login to a test container
-molecule login --host ubuntu-22.04
-
-# Check idempotency
-molecule idempotence
-
-# Destroy test environment
-molecule destroy
-```
-
-## Running Specific Tests
-
-### Test a Single Platform
-
-To test only Ubuntu 22.04 from the default scenario:
-
-```bash
-# Create and converge
-MOLECULE_PLATFORM=ubuntu-22 molecule converge
-
-# Login to specific container
-molecule login --host ubuntu-22
-```
-
-### Test Without Destroying
-
-Useful for debugging:
-
-```bash
-molecule test --destroy=never
-```
-
-### Skip Specific Steps
-
-```bash
-# Skip destroy at the end
-molecule test --destroy=never
-
-# Skip idempotency check
-molecule converge
-molecule verify
-```
-
-## Verification Tests
-
-Each scenario includes a `verify.yml` playbook that validates:
-
-### Common Checks
-- ✅ WordPress directory exists
-- ✅ WordPress core files are present
-- ✅ wp-config.php is configured
-- ✅ Web server is running (Apache/Nginx)
-- ✅ PHP is installed and working
-- ✅ Database service is running
-- ✅ Database is accessible
-- ✅ WordPress database exists
-
-### Platform-Specific Checks
-- **Ubuntu/Debian**: Verifies apt packages
-- **RHEL/Rocky**: Verifies rpm packages
-- Service name validation (apache2 vs httpd)
-
-## Continuous Integration
-
-Tests run automatically on GitHub Actions for:
-- All pull requests
-- Pushes to main/develop branches
-- Weekly scheduled runs
-- Manual workflow dispatch
-
-### CI Test Matrix
-
-| Job | Scenario | Platform |
-|-----|----------|----------|
-| test-ubuntu-22 | default | Ubuntu 22.04 + Rocky 9 |
-| test-ubuntu-24 | ubuntu | Ubuntu 22.04 + 24.04 |
-| test-debian | debian | Debian 11 + 12 |
-| test-rocky-9 | default | Ubuntu 22.04 + Rocky 9 |
-| test-rhel | rhel | Rocky Linux 8 + 9 |
+When adding an independent experiment, place its Molecule files in a distinct
+scenario directory and give its containers unique names. Do not weaken or skip
+checks in the stable scenario to accommodate a compatibility target.
 
 ## Troubleshooting
 
-### Docker Permission Issues
+If a run is interrupted, clean up the named scenario before retrying:
 
 ```bash
-# Add user to docker group
-sudo usermod -aG docker $USER
-newgrp docker
+mise exec python@3.12 -- molecule destroy --scenario-name default
 ```
 
-### Container Won't Start
+For detailed Molecule diagnostics, add `--debug` before the command, for
+example `molecule --debug converge --scenario-name default`.
 
-```bash
-# Clean up Docker resources
-docker system prune -f
-
-# Remove Molecule cache
-rm -rf ~/.cache/molecule/
-```
-
-### Python Dependencies
-
-```bash
-# Reinstall dependencies
-pip install --force-reinstall -r requirements.txt
-```
-
-### Debugging Failed Tests
-
-```bash
-# Run with verbose output
-molecule --debug test
-
-# Keep container running after failure
-molecule test --destroy=never
-
-# Login to inspect
-molecule login --host <hostname>
-```
-
-## Writing Custom Tests
-
-### Adding a New Scenario
-
-1. Create scenario directory:
-```bash
-mkdir -p molecule/new-scenario
-```
-
-2. Add required files:
-- `molecule.yml` - Scenario configuration
-- `converge.yml` - Role execution playbook
-- `verify.yml` - Validation tests
-- `prepare.yml` - Container preparation (optional)
-
-3. Configure platforms in `molecule.yml`:
-```yaml
-platforms:
-  - name: test-platform
-    image: ubuntu:22.04
-    dockerfile: ../default/Dockerfile.j2
-```
-
-4. Run the new scenario:
-```bash
-molecule test --scenario-name new-scenario
-```
-
-### Adding Verification Tests
-
-Edit `verify.yml` in your scenario:
-
-```yaml
-- name: Custom verification
-  hosts: all
-  tasks:
-    - name: Check custom configuration
-      ansible.builtin.stat:
-        path: /path/to/config
-      register: config_check
-      failed_when: not config_check.stat.exists
-```
-
-## Performance Considerations
-
-### Speed Up Tests
-
-```bash
-# Use fewer platforms
-molecule test --platform-name ubuntu-22
-
-# Skip dependency installation
-molecule test --skip-dependency
-
-# Parallel execution (use with caution)
-molecule test --parallel
-```
-
-### Resource Usage
-
-Each test container requires:
-- **Memory**: ~512MB minimum
-- **Disk**: ~2GB per container
-- **CPU**: 1 core recommended per container
-
-## Best Practices
-
-1. **Run tests before committing**: Ensure changes don't break functionality
-2. **Test on all platforms**: Don't assume behavior is consistent
-3. **Keep tests fast**: Disable unnecessary features in test configs
-4. **Use meaningful test names**: Make failures easy to understand
-5. **Document test assumptions**: Add comments to complex test logic
-6. **Clean up after testing**: Run `molecule destroy` when done
-
-## Getting Help
-
-- **Molecule Documentation**: https://molecule.readthedocs.io/
-- **Ansible Documentation**: https://docs.ansible.com/
-- **GitHub Issues**: https://github.com/thomasvincent/ansible-wordpress-enterprise/issues
-- **GitHub Discussions**: https://github.com/thomasvincent/ansible-wordpress-enterprise/discussions
-
-## Contributing Tests
-
-We welcome test improvements! See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
-- Adding new test scenarios
-- Improving verification tests
-- Fixing test flakiness
-- Optimizing test performance
+- Molecule documentation: https://molecule.readthedocs.io/
+- Ansible documentation: https://docs.ansible.com/
+- Issue tracker: https://github.com/thomasvincent/ansible-wordpress-enterprise/issues

@@ -1,0 +1,36 @@
+---
+# Normalize the completed tree once, after every phase that may create a
+# WordPress file. Doing this during installation makes the next convergence
+# repair files subsequently created by configuration or hardening.
+- name: Own the completed WordPress tree
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    state: directory
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    recurse: true
+  become: true
+
+# A WordPress tree is several thousand files; one file task per path creates
+# thousands of module round trips. This changes only paths outside the policy.
+- name: Normalize WordPress directory and file permissions
+  ansible.builtin.command:
+    cmd: >-
+      find {{ wordpress_install_dir | quote }}
+      ( -type d ! -perm {{ wordpress_dir_permissions }} -print
+        -exec chmod {{ wordpress_dir_permissions }} {} + )
+      -o ( -type f ! -name wp-config.php
+        ! -perm {{ wordpress_file_permissions }} -print
+        -exec chmod {{ wordpress_file_permissions }} {} + )
+  become: true
+  register: wordpress_permission_sweep
+  changed_when: wordpress_permission_sweep.stdout | length > 0
+
+- name: Protect the WordPress configuration
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    state: file
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: "0600"
+  become: true

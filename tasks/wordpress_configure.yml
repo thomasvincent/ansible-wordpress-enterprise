@@ -114,7 +114,6 @@
   ansible.builtin.command:
     cmd: >
       {{ wordpress_wpcli_bin }} rewrite structure "/%postname%/"
-      --hard
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -292,6 +291,8 @@
   ansible.builtin.file:
     path: "{{ wordpress_install_dir }}/wp-content/advanced-cache.php"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
     mode: '0644'

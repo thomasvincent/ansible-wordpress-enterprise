@@ -30,9 +30,9 @@
 
 ## ⚠️ What currently works
 
-The core path installs and configures WordPress: prerequisites, the database,
-PHP, Apache or Nginx, the WordPress install itself, and the baseline hardening
-in `security_hardening.yml`. That is what the Molecule scenarios exercise.
+The stable v1 contract installs and configures WordPress end to end on Ubuntu
+24.04 with Nginx and Rocky Linux 9 with Apache. CI runs the same ordered
+converge, idempotence, and runtime verification contract on both hosts.
 
 ### Supported distributions
 
@@ -43,13 +43,15 @@ Maintenance Support are all out of scope.
 | Release | Full support until |
 | --- | --- |
 | Enterprise Linux 9 | 2027-05-31 |
-| Ubuntu 22.04 LTS | 2027-04-01 |
 | Ubuntu 24.04 LTS | 2029-05-31 |
-| Debian 13 | 2028-08-09 |
 
 `meta/platform_support.yml` holds the policy and the dates;
 `tests/unit/test_platform_support.py` fails the build the day a release leaves
 full support, or when `meta/main.yml` and the Molecule matrix drift from it.
+
+Ubuntu 22.04 and Debian 13 remain compatibility targets, not supported release
+platforms. They will be promoted only after they pass the same pinned-image,
+end-to-end contract without platform-specific exceptions.
 
 These features are **off by default and do not currently work**, because the
 role references templates it does not ship (62 of them, listed in
@@ -75,22 +77,20 @@ templates exist.
 ### Core Capabilities
 
 ✅ **Multi-Platform Support**
-- Ubuntu 20.04 LTS, 22.04 LTS, 24.04 LTS
-- RHEL 9 / Rocky Linux 9 / AlmaLinux 9
-- CentOS Stream 9
+- Ubuntu 24.04 LTS (tested with Nginx)
+- Enterprise Linux 9 (tested on Rocky Linux 9 with Apache)
 
   Enterprise Linux 8 is not supported: its platform Python is 3.6, below
   ansible-core's floor of 3.9 for a managed node, and no `python39-dnf`
   package exists, so no interpreter satisfies both ansible-core and the
   `dnf` module.
-- Debian 11, 12
 
 ✅ **Web Server Options**
 - **Nginx**: FastCGI cache, HTTP/2, SSL/TLS, rate limiting
 - **Apache**: mod_php/PHP-FPM, ModSecurity WAF, HTTP/2
 
 ✅ **PHP Support**
-- PHP versions: 7.4, 8.0, 8.1, 8.2, 8.3
+- PHP versions: 7.4, 8.0, 8.1, 8.2, 8.3, 8.4
 - OPcache optimization
 - PHP-FPM tuning
 - Multiple PHP version support
@@ -1101,39 +1101,29 @@ wordpress_child_theme:
 
 ### Molecule Testing
 
-The role includes comprehensive Molecule testing scenarios for multiple platforms:
+The default Molecule scenario is the release contract: Ubuntu 24.04/Nginx and
+Rocky Linux 9/Apache must converge, be idempotent, and pass runtime checks.
 
 ```bash
 # Install testing dependencies
-pip install molecule molecule-plugins[docker] ansible-lint yamllint
+mise exec python@3.12 -- python -m pip install -r requirements.txt
+mise exec python@3.12 -- ansible-galaxy collection install -r requirements.yml
 
-# Run all tests (default scenario with Ubuntu 22, 24 and Rocky 9)
-molecule test
-
-# Run specific scenario
-molecule test -s default  # Ubuntu 22, 24 and Rocky Linux 9
-molecule test -s ubuntu   # Ubuntu 22.04 and 24.04
-molecule test -s debian   # Debian 11 and 12
-molecule test -s rhel     # Rocky Linux 9
+# Run the complete release contract
+mise exec python@3.12 -- molecule test --scenario-name default
 
 # Interactive testing
-molecule converge          # Deploy the role
-molecule verify           # Run verification tests
-molecule destroy          # Clean up test environment
-
-# Run idempotency test
-molecule test --destroy=never
-molecule idempotence
+mise exec python@3.12 -- molecule converge --scenario-name default
+mise exec python@3.12 -- molecule idempotence --scenario-name default
+mise exec python@3.12 -- molecule verify --scenario-name default
+mise exec python@3.12 -- molecule destroy --scenario-name default
 ```
 
 #### Test Scenarios
 
 | Scenario | Platforms | Purpose |
 |----------|-----------|---------|
-| **default** | Ubuntu 22.04, 24.04, Rocky Linux 9 | Quick testing across major platforms |
-| **ubuntu** | Ubuntu 22.04, 24.04 | Ubuntu-specific testing |
-| **debian** | Debian 11, 12 | Debian-specific testing |
-| **rhel** | Rocky Linux 9 | RHEL/CentOS-compatible testing |
+| **default** | Ubuntu 24.04/Nginx, Rocky Linux 9/Apache | Stable release contract |
 
 All scenarios include:
 - ✅ Syntax checking

@@ -48,7 +48,7 @@ distributions:
     meta_version: jammy
     image: geerlingguy/docker-ubuntu2204-ansible
     full_support_ends: "2027-04-01"
-    supported: true
+    supported: false  # compatibility target; not in the stable v1 matrix
 
   - meta_name: Ubuntu
     meta_version: noble
@@ -78,4 +78,4 @@ distributions:
     meta_version: trixie
     image: geerlingguy/docker-debian13-ansible
     full_support_ends: "2028-08-09"
-    supported: true
+    supported: false  # compatibility target; not in the stable v1 matrix

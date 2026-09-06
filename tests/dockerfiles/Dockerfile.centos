@@ -37,8 +37,7 @@ RUN useradd -m -s /bin/bash -G wheel testuser \
 # Configure SSH
 RUN ssh-keygen -A \
     && echo 'root:testroot123' | chpasswd \
-    && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
-    && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    && printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/99-test-auth.conf
 
 # Create directory for WordPress installation
 RUN mkdir -p /var/www/html

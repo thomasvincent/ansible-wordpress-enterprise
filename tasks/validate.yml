@@ -57,7 +57,9 @@
       - ansible_facts.mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 2147483648 # 2GB
     fail_msg: "Insufficient disk space. At least 2GB free space required on root filesystem"
     success_msg: "Disk space validation passed"
-  when: ansible_facts.mounts is defined
+  when:
+    - ansible_facts.mounts is defined
+    - ansible_facts.mounts | selectattr('mount', 'equalto', '/') | list | length > 0
 
 # ============================================================================
 # WordPress Configuration Validation
@@ -184,7 +186,7 @@
     that:
       - wordpress_php_version is defined
       - wordpress_php_version is string
-      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3']
+      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
     fail_msg: "Invalid or unsupported PHP version: {{ wordpress_php_version | default('undefined') }}"
     success_msg: "PHP version validation passed"
 
@@ -192,12 +194,10 @@
   ansible.builtin.assert:
     that:
       - wordpress_php_memory_limit is match('^[0-9]+[MG]$')
-      - wordpress_php_max_execution_time is number
-      - wordpress_php_max_execution_time >= 30
+      - wordpress_php_max_execution_time | int >= 30
       - wordpress_php_upload_max_filesize is match('^[0-9]+[MG]$')
       - wordpress_php_post_max_size is match('^[0-9]+[MG]$')
-      - wordpress_php_max_input_vars is number
-      - wordpress_php_max_input_vars >= 1000
+      - wordpress_php_max_input_vars | int >= 1000
     fail_msg: "Invalid PHP configuration parameters"
     success_msg: "PHP configuration validation passed"
 
