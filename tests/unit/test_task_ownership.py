@@ -56,6 +56,8 @@ WP_CONFIG_WRITERS = {
     "ansible.builtin.file": "path",
     "ansible.builtin.template": "dest",
     "ansible.builtin.copy": "dest",
+    "ansible.builtin.get_url": "dest",
+    "ansible.builtin.unarchive": "dest",
     "ansible.builtin.lineinfile": "path",
     "ansible.builtin.blockinfile": "path",
     "ansible.builtin.replace": "path",
@@ -350,6 +352,7 @@ def _wp_config_modes(all_tasks) -> set[str]:
     all_tasks = list(all_tasks)
     target = "{{wordpress_install_dir}}/wp-config.php"
     install_root = "{{wordpress_install_dir}}"
+    install_literal = str(DEFAULT_VALUES["wordpress_install_dir"]).rstrip("/")
     safe_dynamic_file_lists = set()
     for _, task, _ in all_tasks:
         find = task.get("ansible.builtin.find")
@@ -379,12 +382,23 @@ def _wp_config_modes(all_tasks) -> set[str]:
                 register in str(loop) for register in safe_dynamic_file_lists
             )
             unresolved_destination = _normalise(body[destination])
-            item_is_sanitized = "| basename" in body[destination]
+            static_prefix = unresolved_destination.split("{{item", 1)[0].rstrip("/")
+            item_is_sanitized_below_config = (
+                "| basename" in body[destination]
+                and static_prefix.startswith(f"{install_root}/")
+                and static_prefix != install_root
+            )
+            destination_is_fixed_outside_install = (
+                static_prefix.startswith("/")
+                and not static_prefix.startswith(install_literal)
+                and not install_literal.startswith(f"{static_prefix}/")
+            )
             if (
                 dynamic_loop
                 and "item" in unresolved_destination
                 and not loop_is_scoped_below_config
-                and not item_is_sanitized
+                and not item_is_sanitized_below_config
+                and not destination_is_fixed_outside_install
                 and body.get("mode") is not None
             ):
                 # An unresolved runtime item could target wp-config.php. Record
@@ -402,7 +416,6 @@ def _wp_config_modes(all_tasks) -> set[str]:
                     recurse = _render_loop_item(recurse, item)
                 destination_symbolic = _normalise(destination_value).rstrip("/")
                 destination_literal = _normalise_file_value(destination_value).rstrip("/")
-                install_literal = str(DEFAULT_VALUES["wordpress_install_dir"]).rstrip("/")
                 recurse_is_false = recurse is False or str(recurse).lower() in {
                     "false", "none", "0", ""
                 }
@@ -581,6 +594,22 @@ def test_wp_config_guard_detects_config_path_spellings(destination: str) -> None
     assert _wp_config_modes(tasks) == {"0644"}
 
 
+@pytest.mark.parametrize("module", ["ansible.builtin.get_url", "ansible.builtin.unarchive"])
+def test_all_whole_file_modules_are_config_mode_writers(module: str) -> None:
+    tasks = _synthetic(f"""
+- name: Unsafe whole-file writer
+  {module}:
+    src: source
+    dest: '{{{{ wordpress_install_dir }}}}/wp-config.php'
+    mode: '0644'
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
+
+
+def test_wp_config_writer_map_covers_file_mutation_modules() -> None:
+    assert set(WHOLE_FILE) | set(PARTIAL) <= set(WP_CONFIG_WRITERS)
+
+
 def test_wp_config_guard_rejects_a_mode_less_writer() -> None:
     tasks = _synthetic("""
 - name: Mode-less config copy
@@ -657,6 +686,7 @@ def test_wp_config_guard_detects_loop_driven_recursive_mode() -> None:
         "{{ item.dest }}",
         "{{ wordpress_install_dir }}/{{ item }}",
         "{{ wordpress_install_dir }}/{{ item.path }}",
+        "{{ wordpress_install_dir }}/{{ item | basename }}",
     ],
 )
 def test_wp_config_guard_fails_closed_on_dynamic_mode_loop(item_path: str) -> None:
