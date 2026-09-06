@@ -12,11 +12,19 @@ pm.max_children = {{ wordpress_php_fpm_max_children | default('50') }}
 pm.start_servers = {{ wordpress_php_fpm_start_servers | default('5') }}
 pm.min_spare_servers = {{ wordpress_php_fpm_min_spare_servers | default('5') }}
 pm.max_spare_servers = {{ wordpress_php_fpm_max_spare_servers | default('35') }}
-pm.max_requests = {{ wordpress_php_fpm_max_requests | default('500') }}
+pm.max_requests = {{ wordpress_php_fpm_max_requests | default('1000') }}
 
 ; Process naming
-pm.process_idle_timeout = 10s
-pm.max_requests = 500
+pm.process_idle_timeout = {{ wordpress_php_fpm_process_idle_timeout | default('10s') }}
+request_terminate_timeout = {{ wordpress_php_fpm_request_terminate_timeout | default('300') }}
+rlimit_files = {{ wordpress_php_fpm_rlimit_files | default('65536') }}
+rlimit_core = {{ wordpress_php_fpm_rlimit_core | default('0') }}
+{% if wordpress_php_fpm_status_page | default(false) %}
+pm.status_path = /status
+{% endif %}
+{% if wordpress_php_fpm_ping_page | default(false) %}
+ping.path = /ping
+{% endif %}
 
 ; Environment variables
 env[HOSTNAME] = $HOSTNAME

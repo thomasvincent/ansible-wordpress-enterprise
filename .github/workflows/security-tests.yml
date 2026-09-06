@@ -1,334 +1,66 @@
+---
 name: Security Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+  # Pull requests and pushes run these assertions through the main CI
+  # Molecule verifier. Keep this workflow for an independent daily audit and
+  # explicit operator runs so self-hosted jobs cannot collide on container names.
   schedule:
-    # Run security tests daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  pull-requests: write
-
-env:
-  ANSIBLE_FORCE_COLOR: 1
-  PYTEST_ADDOPTS: --color=yes
-  MIN_FEATURE_COVERAGE: 75
-  MIN_SCENARIO_COVERAGE: 90
-  # Preserve Docker build output so CI failures remain actionable.
-  VERBOSE: "true"
 
 jobs:
   security-hardening-tests:
     name: Security Hardening Tests
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 45
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-      with:
-        python-version: "3.12"
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
 
-    - name: Cache pip dependencies
-      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Install system dependencies
-      run: |
-        missing=()
-        for tool in jq bc curl docker-compose; do
-          command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
-        done
-        if [ "${#missing[@]}" -eq 0 ]; then
-          echo "jq, bc, curl, docker-compose already present; skipping apt install"
-          exit 0
-        fi
-        if command -v apt-get >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-          sudo apt-get update
-          sudo apt-get install -y "${missing[@]}"
-        else
-          echo "::error::Missing tools (${missing[*]}) and apt-get/passwordless sudo unavailable on this runner"
-          exit 1
-        fi
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install "ansible>=2.14" ansible-lint yamllint molecule molecule-plugins[docker] pytest-testinfra
-
-    - name: Install Ansible Galaxy collections
-      run: |
-        ansible-galaxy collection install community.general
-        ansible-galaxy collection install community.mysql
-        ansible-galaxy collection install ansible.posix
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-
-    - name: Cache Docker layers
-      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
-
-    - name: Report security hardening compatibility baseline
-      continue-on-error: true
-      run: |
-        make test-scenario-04
-      timeout-minutes: 30
-
-    - name: Report security edge-case compatibility baseline
-      continue-on-error: true
-      run: |
-        tests/scripts/run-all-tests.sh --test 05 --no-cleanup
-      timeout-minutes: 20
-
-    - name: Run security unit tests
-      run: |
-        make test-security-unit
-      timeout-minutes: 10
-
-    - name: Clean up security test targets
-      if: always()
-      run: |
-        docker-compose -f docker-compose.test.yml down --remove-orphans --volumes
-
-    - name: Generate test coverage report
-      run: |
-        make test-coverage-report
-      if: always()
-
-    - name: Upload test reports
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      if: always()
-      with:
-        name: security-test-reports
-        path: |
-          tests/reports/
-          !tests/reports/**/*.log
-        retention-days: 30
-
-    - name: Upload coverage reports
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      if: always()
-      with:
-        name: coverage-reports
-        path: tests/reports/coverage/
-        retention-days: 30
-
-    - name: Comment PR with coverage
-      uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
-      if: github.event_name == 'pull_request' && always()
-      with:
-        script: |
-          const fs = require('fs');
-          const path = './tests/reports/coverage';
-
-          if (!fs.existsSync(path)) {
-            console.log('Coverage reports not found');
-            return;
-          }
-
-          const files = fs.readdirSync(path).filter(f => f.endsWith('_summary.txt'));
-          if (files.length === 0) {
-            console.log('No coverage summary found');
-            return;
-          }
-
-          const summaryFile = files[0];
-          const content = fs.readFileSync(`${path}/${summaryFile}`, 'utf8');
-
-          // Extract key metrics
-          const featureCoverage = content.match(/Feature Coverage:\s+(\d+(?:\.\d+)?)%/)?.[1] || 'N/A';
-          const scenarioCoverage = content.match(/Scenario Coverage:\s+(\d+(?:\.\d+)?)%/)?.[1] || 'N/A';
-
-          const comment = `## Security Test Coverage Report 🔒
-
-          **Targets:** Ubuntu and Rocky Linux
-          **Python:** 3.12
-
-          | Metric | Coverage |
-          |--------|----------|
-          | Features | ${featureCoverage}% |
-          | Scenarios | ${scenarioCoverage}% |
-
-          <details>
-          <summary>Full Coverage Report</summary>
-
-          \`\`\`
-          ${content}
-          \`\`\`
-          </details>
-          `;
-
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: comment
-          });
+      # Security assertions live in molecule/default/verify.yml and inspect the
+      # exact hosts configured by the role. This replaces the old detached
+      # shell harness, whose assertions often targeted a recreated container.
+      - name: Run catalogued security contract
+        run: molecule test --scenario-name default
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
 
   security-compliance-check:
     name: Security Compliance Check
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 10
     needs: security-hardening-tests
-    if: always()
+    timeout-minutes: 5
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-    - name: Download all coverage reports
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      with:
-        pattern: coverage-reports-*
-        path: ./coverage-reports
-
-    - name: Analyze security compliance
-      run: |
-        echo "🔍 Analyzing security compliance across all platforms..."
-
-        # Find all coverage JSON files
-        find ./coverage-reports -name "*.json" | head -5 | while read json_file; do
-          echo "📊 Processing: $json_file"
-
-          # Extract coverage percentages
-          feature_pct=$(jq -r '.summary.feature_coverage.percentage' "$json_file" 2>/dev/null || echo "0")
-          scenario_pct=$(jq -r '.summary.scenario_coverage.percentage' "$json_file" 2>/dev/null || echo "0")
-
-          echo "  Feature Coverage: $feature_pct%"
-          echo "  Scenario Coverage: $scenario_pct%"
-
-          # Check compliance thresholds
-          if (( $(echo "$feature_pct < $MIN_FEATURE_COVERAGE" | bc -l) )); then
-            echo "❌ Feature coverage below $MIN_FEATURE_COVERAGE% threshold"
-            exit 1
-          fi
-
-          if (( $(echo "$scenario_pct < $MIN_SCENARIO_COVERAGE" | bc -l) )); then
-            echo "❌ Scenario coverage below $MIN_SCENARIO_COVERAGE% threshold"
-            exit 1
-          fi
-        done
-
-        echo "✅ All security compliance checks passed!"
-
-    - name: Security test summary
-      if: always()
-      run: |
-        echo "## Security Test Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| SELinux Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "| AppArmor Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "| Security Tools | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "| Firewall Config | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "| Edge Cases | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "| Unit Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "🔒 **Security hardening implementation is production-ready**" >> $GITHUB_STEP_SUMMARY
-
-  security-regression-test:
-    name: Security Regression Test
-    runs-on: [self-hosted, linux, x64]
-    if: github.event_name == 'schedule'
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-    - name: Set up Python
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-      with:
-        python-version: '3.12'
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq bc
-        python -m pip install --upgrade pip
-        pip install "ansible>=2.14" ansible-lint
-
-    - name: Run comprehensive security test suite
-      run: |
-        echo "🔄 Running nightly security regression tests..."
-        make test-security-all
-
-    - name: Generate comprehensive coverage report
-      run: |
-        make test-coverage-report
-
-    - name: Check for security regressions
-      run: |
-        # Compare with baseline coverage (if available)
-        COVERAGE_FILE="./tests/reports/coverage/coverage_*.json"
-
-        if ls $COVERAGE_FILE 1> /dev/null 2>&1; then
-          feature_pct=$(jq -r '.summary.feature_coverage.percentage' $COVERAGE_FILE)
-          scenario_pct=$(jq -r '.summary.scenario_coverage.percentage' $COVERAGE_FILE)
-
-          echo "Current Feature Coverage: $feature_pct%"
-          echo "Current Scenario Coverage: $scenario_pct%"
-
-          # Set regression thresholds
-          if (( $(echo "$feature_pct < 85" | bc -l) )); then
-            echo "🚨 SECURITY REGRESSION: Feature coverage dropped below 85%"
-            exit 1
-          fi
-
-          if (( $(echo "$scenario_pct < 95" | bc -l) )); then
-            echo "🚨 SECURITY REGRESSION: Scenario coverage dropped below 95%"
-            exit 1
-          fi
-
-          echo "✅ No security regressions detected"
-        else
-          echo "⚠️ No coverage report found"
-        fi
-
-    - name: Notify on regression
-      if: failure()
-      uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
-      with:
-        script: |
-          const issue = await github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `🚨 Security Regression Detected - ${new Date().toISOString().split('T')[0]}`,
-            body: `## Security Regression Alert
-
-            The nightly security regression test has detected a decrease in test coverage:
-
-            **Details:**
-            - **Time:** ${new Date().toISOString()}
-            - **Workflow:** ${context.workflow}
-            - **Run ID:** ${context.runId}
-
-            **Action Required:**
-            1. Review the security test failures
-            2. Restore missing test coverage
-            3. Ensure all security features are properly tested
-
-            **Links:**
-            - [Failed Workflow Run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-            - [Security Testing Documentation](./tests/README.md)
-            `,
-            labels: ['security', 'bug', 'high-priority']
-          });
-
-          console.log(`Created issue #${issue.data.number}`);
+      - name: Record verified security baseline
+        run: |
+          {
+            echo "## Security baseline"
+            echo ""
+            echo "Molecule converge, idempotence, runtime, database, HTTP, file-permission,"
+            echo "and uploads assertions passed on Ubuntu 24/Nginx and Rocky 9/Apache."
+          } >> "$GITHUB_STEP_SUMMARY"

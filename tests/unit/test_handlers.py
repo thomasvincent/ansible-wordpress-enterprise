@@ -85,9 +85,6 @@ def test_every_notify_resolves_to_a_handler(handler_names: set[str]) -> None:
 # notifies is not necessarily unused. These are kept for downstream playbooks;
 # removing one is a breaking change and needs a major version in meta/main.yml.
 PUBLIC = {
-    # Every handler name main already publishes. A downstream playbook may
-    # notify any of them, so this repo having no notify for one is not
-    # evidence it is unused. Removing one is a breaking change.
     "Reload apache", "Reload firewalld", "Reload nginx", "Reload apparmor",
     "Reload systemd", "Restart apache", "Restart auditd", "Restart fail2ban",
     "Restart mariadb", "Restart memcached", "Restart mysql", "Restart nginx",
@@ -106,8 +103,7 @@ def test_no_handler_is_orphaned(handler_names: set[str]) -> None:
 
 # Dropped deliberately. Both name a PHP version rather than reading
 # wordpress_php_fpm_service, so they only ever worked on a host running that
-# exact stream; "Restart php-fpm" supersedes both. Removing a published name is
-# a breaking change, recorded here so it is a decision and not an accident.
+# exact stream; "Restart php-fpm" supersedes both.
 REMOVED = {"Restart php8.1-fpm", "Restart php8.2-fpm"}
 
 
@@ -127,12 +123,7 @@ def test_the_public_handlers_all_exist(handler_names: set[str]) -> None:
 
 
 def test_handlers_live_only_where_ansible_loads_them() -> None:
-    """A role auto-loads handlers/main.yml and nothing else.
-
-    A second file under handlers/ looks like it defines handlers and does not:
-    every name in it is silently unreachable, which is how a duplicate of a
-    live handler can sit in the tree looking authoritative.
-    """
+    """A role auto-loads handlers/main.yml and nothing else."""
     stray = sorted(
         p.name for p in (ROOT / "handlers").glob("*.yml") if p.name != "main.yml"
     )

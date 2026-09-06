@@ -50,7 +50,7 @@
     wordpress_cloudflare_dns_records:
       - name: "example.com"
         type: "A"
-        value: "{{ ansible_default_ipv4.address }}"
+        value: "{{ ansible_facts.default_ipv4.address }}"
         proxied: true
         ttl: 1
 
@@ -75,15 +75,15 @@
     # ========================================================================
     # SSL/TLS (Cloudflare Flexible/Full)
     # ========================================================================
-    wordpress_enable_ssl: true
+    wordpress_enable_ssl: false  # Incomplete feature; missing role templates
     wordpress_use_letsencrypt: true
     wordpress_letsencrypt_email: "ssl@example.com"
 
     # ========================================================================
     # Security
     # ========================================================================
-    wordpress_enable_fail2ban: true
-    wordpress_configure_firewall: true
+    wordpress_enable_fail2ban: false  # Incomplete feature; missing role templates
+    wordpress_configure_firewall: false  # Incomplete feature; missing role templates
     wordpress_disable_file_edit: true
 
     # ========================================================================
