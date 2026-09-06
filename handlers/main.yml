@@ -135,7 +135,9 @@
   become: true
   become_user: "{{ wordpress_system_user }}"
   register: wordpress_cache_flush
-  changed_when: wordpress_cache_flush.rc == 0
+  # Mark only a failed best-effort flush changed so Ansible dispatches the
+  # reporting handler without making successful runs non-idempotent.
+  changed_when: wordpress_cache_flush.rc | default(1) != 0
   # Best effort: the config can change before WordPress is installed, and a
   # cold cache is not a deployment failure. Report it rather than hide it.
   failed_when: false
@@ -143,8 +145,10 @@
 
 - name: Report a failed wp-cli cache flush
   ansible.builtin.debug:
-    msg: "wp cache flush exited {{ wordpress_cache_flush.rc }}: {{ wordpress_cache_flush.stderr | default('') }}"
-  when: wordpress_cache_flush.rc | default(0) != 0
+    msg: >-
+      wp cache flush exited {{ wordpress_cache_flush.rc | default('unavailable') }}:
+      {{ wordpress_cache_flush.stderr | default(wordpress_cache_flush.msg | default('')) }}
+  when: wordpress_cache_flush.rc | default(1) != 0
 
 - name: Reboot system
   ansible.builtin.reboot:

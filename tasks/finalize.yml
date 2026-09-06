@@ -11,6 +11,24 @@
     recurse: true
   become: true
 
+- name: Find legacy in-place wp-config.php backups
+  ansible.builtin.find:
+    paths: "{{ wordpress_install_dir }}"
+    patterns: "wp-config.php.*~"
+    file_type: file
+    recurse: false
+  become: true
+  register: wordpress_legacy_config_backups
+
+- name: Remove legacy in-place wp-config.php backups
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  become: true
+  loop: "{{ wordpress_legacy_config_backups.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
 # A WordPress tree is several thousand files; one file task per path creates
 # thousands of module round trips. This changes only paths outside the policy.
 - name: Normalize WordPress directory and file permissions
@@ -19,7 +37,7 @@
       find {{ wordpress_install_dir | quote }}
       ( -type d ! -perm {{ wordpress_dir_permissions }} -print
         -exec chmod {{ wordpress_dir_permissions }} {} + )
-      -o ( -type f ! -name wp-config.php
+      -o ( -type f ! -name 'wp-config.php*'
         ! -perm {{ wordpress_file_permissions }} -print
         -exec chmod {{ wordpress_file_permissions }} {} + )
   become: true

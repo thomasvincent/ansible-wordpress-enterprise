@@ -17,7 +17,6 @@
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
     mode: '0600'
-    backup: true
   become: true
   when: not wordpress_installed.stat.exists
 
@@ -166,7 +165,7 @@
           define('SITE_ID_CURRENT_SITE', 1);
           define('BLOG_ID_CURRENT_SITE', 1);
         insertbefore: "/* That's all, stop editing!"
-        backup: true
+        mode: '0600'
       become: true
 
 - name: Configure additional WordPress constants
@@ -179,7 +178,7 @@
       define('{{ constant }}', {{ value | to_json }});
       {% endfor %}
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: wordpress_additional_constants | length > 0
 
@@ -224,7 +223,7 @@
           {% endif %}
           define('WP_CACHE_KEY_SALT', '{{ wordpress_server_name }}');
         insertbefore: "/* That's all, stop editing!"
-        backup: true
+        mode: '0600'
       become: true
 
 - name: Configure WordPress CDN settings
@@ -236,7 +235,7 @@
       define('WP_CDN_DOMAIN', '{{ wordpress_cdn_url }}');
       define('WP_CDN_HTTPS', {{ 'true' if wordpress_cdn_ssl_enabled else 'false' }});
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when:
     - wordpress_enable_cdn | bool
@@ -258,7 +257,7 @@
       define('WPMS_SMTP_FROM', '{{ wordpress_smtp_from_email }}');
       define('WPMS_SMTP_FROMNAME', '{{ wordpress_smtp_from_name }}');
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: wordpress_smtp_enabled | bool
 
@@ -271,7 +270,7 @@
       define('WP_AUTO_UPDATE_CORE', true);
       define('AUTOMATIC_UPDATER_DISABLED', false);
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: not wordpress_debug | bool
 
@@ -284,7 +283,7 @@
       define('DISALLOW_FILE_EDIT', {{ 'true' if wordpress_disable_file_edit else 'false' }});
       define('DISALLOW_FILE_MODS', {{ 'true' if wordpress_disable_file_mods else 'false' }});
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
 
 - name: Create advanced-cache.php for caching plugins
@@ -325,7 +324,7 @@
       define('WP_DEBUG_LOG_FILE', '{{ wordpress_error_log }}');
       {% endif %}
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
 
 - name: Install and activate essential plugins

@@ -144,7 +144,7 @@
 - name: Configure file permissions recursively
   ansible.builtin.command:
     cmd: >-
-      find {{ wordpress_install_dir }} -type f ! -name wp-config.php
+      find {{ wordpress_install_dir }} -type f ! -name 'wp-config.php*'
       -exec chmod {{ wordpress_file_permissions }} {} \;
   become: true
   changed_when: false

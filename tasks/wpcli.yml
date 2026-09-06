@@ -107,7 +107,9 @@
 - name: Report a missing WP-CLI bash completion
   ansible.builtin.debug:
     msg: "wp-cli bash completion was not installed: {{ wordpress_wpcli_completion.msg | default('') }}"
-  when: wordpress_wpcli_completion is failed
+  when:
+    - not wordpress_wpcli_completion.skipped | default(false)
+    - wordpress_wpcli_completion.status_code | default(-1) | int not in [200, 304]
 
 - name: Verify WP-CLI installation
   ansible.builtin.command:
@@ -131,6 +133,15 @@
   changed_when: false
   failed_when: false
   when: wordpress_install_dir is defined
+
+- name: Report an unavailable WordPress installation to WP-CLI
+  ansible.builtin.debug:
+    msg: >-
+      wp-cli could not read the WordPress installation:
+      {{ wp_core_test.stderr | default(wp_core_test.msg | default('')) }}
+  when:
+    - not wp_core_test.skipped | default(false)
+    - wp_core_test.rc | default(1) != 0
 
 - name: Configure WP-CLI aliases
   ansible.builtin.lineinfile:

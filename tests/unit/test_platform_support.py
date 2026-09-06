@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 import os
 import pathlib
+import re
 import warnings
 
 import pytest
@@ -68,6 +69,8 @@ def _reference_date() -> datetime.date:
     """UTC today, overridable so the check is reproducible on any checkout."""
     override = os.environ.get("PLATFORM_SUPPORT_DATE")
     if override:
+        if os.environ.get("CI"):
+            raise AssertionError("PLATFORM_SUPPORT_DATE cannot override the support gate in CI")
         warnings.warn(
             f"PLATFORM_SUPPORT_DATE={override} overrides the end-of-life check; "
             "this is for reproducing an old checkout, not for silencing CI",
@@ -100,6 +103,13 @@ def test_meta_declares_exactly_the_supported_releases(supported: list[dict]) -> 
     }
     expected = {(d["meta_name"], str(d["meta_version"])) for d in supported}
     assert declared == expected
+
+
+def test_meta_declares_the_documented_ansible_floor() -> None:
+    requirements = (ROOT / "requirements.txt").read_text()
+    match = re.search(r"^ansible-core>=(\d+\.\d+)", requirements, re.MULTILINE)
+    assert match, "requirements.txt does not declare an ansible-core lower bound"
+    assert _load(META)["galaxy_info"]["min_ansible_version"] == match.group(1)
 
 
 def test_molecule_runs_only_supported_images(
@@ -153,15 +163,22 @@ def test_the_date_override_is_not_baked_into_ci() -> None:
     assert not users, f"PLATFORM_SUPPORT_DATE is set in-tree, disabling the gate: {users}"
 
 
-def test_the_date_override_is_honoured() -> None:
-    previous = os.environ.get("PLATFORM_SUPPORT_DATE")
-    os.environ["PLATFORM_SUPPORT_DATE"] = "2000-01-01"
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            assert _reference_date() == datetime.date(2000, 1, 1)
-    finally:
-        if previous is None:
-            del os.environ["PLATFORM_SUPPORT_DATE"]
-        else:
-            os.environ["PLATFORM_SUPPORT_DATE"] = previous
+def test_the_date_override_is_honoured(monkeypatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setenv("PLATFORM_SUPPORT_DATE", "2000-01-01")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert _reference_date() == datetime.date(2000, 1, 1)
+
+
+def test_the_date_override_is_refused_in_ci(monkeypatch) -> None:
+    monkeypatch.setenv("PLATFORM_SUPPORT_DATE", "2000-01-01")
+    monkeypatch.setenv("CI", "true")
+    with pytest.raises(AssertionError, match="cannot override"):
+        _reference_date()
+
+
+def test_reference_date_uses_utc_today_without_an_override(monkeypatch) -> None:
+    monkeypatch.delenv("PLATFORM_SUPPORT_DATE", raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    assert _reference_date() == datetime.datetime.now(datetime.timezone.utc).date()
