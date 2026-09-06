@@ -103,6 +103,18 @@ def all_tasks() -> list[tuple[str, dict, tuple]]:
     return list(_tasks())
 
 
+@pytest.fixture(scope="module")
+def security_tasks(all_tasks) -> list[tuple[str, dict, tuple]]:
+    handlers = ROOT / "handlers" / "main.yml"
+    assert handlers.is_file(), "handlers/main.yml is absent from the security corpus"
+    handler_tasks = [
+        ("handlers/main.yml", task, when)
+        for task, when in _walk(yaml.safe_load(handlers.read_text()) or [])
+    ]
+    assert handler_tasks, "handlers/main.yml contains no tasks"
+    return [*all_tasks, *handler_tasks]
+
+
 def _normalise(target: str) -> str:
     """Key a destination on its text, with folding and filters flattened.
 
@@ -348,7 +360,10 @@ def _wp_config_modes(all_tasks) -> set[str]:
         paths = paths if isinstance(paths, list) else [paths]
         normalised = [_normalise(path).rstrip("/") for path in paths if isinstance(path, str)]
         if normalised and all(
-            path.startswith(f"{install_root}/") and path != target for path in normalised
+            path.startswith(f"{install_root}/")
+            and path != target
+            and not ({".", ".."} & set(path.split("/")))
+            for path in normalised
         ):
             safe_dynamic_file_lists.add(register)
     modes = set()
@@ -364,15 +379,12 @@ def _wp_config_modes(all_tasks) -> set[str]:
                 register in str(loop) for register in safe_dynamic_file_lists
             )
             unresolved_destination = _normalise(body[destination])
-            destination_is_fixed_below_config = (
-                unresolved_destination.startswith(f"{install_root}/")
-                and unresolved_destination != target
-            )
+            item_is_sanitized = "| basename" in body[destination]
             if (
                 dynamic_loop
                 and "item" in unresolved_destination
                 and not loop_is_scoped_below_config
-                and not destination_is_fixed_below_config
+                and not item_is_sanitized
                 and body.get("mode") is not None
             ):
                 # An unresolved runtime item could target wp-config.php. Record
@@ -524,26 +536,22 @@ def _wp_config_backup_writers(all_tasks) -> list[str]:
     return writers
 
 
-def test_wp_config_modes_are_always_private(all_tasks) -> None:
-    modes = _wp_config_modes(all_tasks)
+def test_wp_config_modes_are_always_private(security_tasks) -> None:
+    modes = _wp_config_modes(security_tasks)
     assert modes, "no task protects wp-config.php"
     assert modes == {"0600"}, f"wp-config.php has unsafe mode writers: {sorted(modes)}"
 
 
-def test_wp_config_has_no_in_place_backups(all_tasks) -> None:
-    backup_writers = _wp_config_backup_writers(all_tasks)
+def test_wp_config_has_no_in_place_backups(security_tasks) -> None:
+    backup_writers = _wp_config_backup_writers(security_tasks)
     assert not backup_writers, (
         "wp-config.php backups expose secret-bearing copies in the document root: "
         f"{backup_writers}"
     )
 
 
-def test_wp_config_is_excluded_from_permission_sweeps(all_tasks) -> None:
-    handler_tasks = [
-        ("handlers/main.yml", task, when)
-        for task, when in _walk(yaml.safe_load((ROOT / "handlers" / "main.yml").read_text()))
-    ]
-    unsafe_sweeps = _unsafe_wp_config_sweeps([*all_tasks, *handler_tasks])
+def test_wp_config_is_excluded_from_permission_sweeps(security_tasks) -> None:
+    unsafe_sweeps = _unsafe_wp_config_sweeps(security_tasks)
     assert not unsafe_sweeps, f"chmod sweeps include wp-config.php: {unsafe_sweeps}"
 
 
@@ -641,7 +649,16 @@ def test_wp_config_guard_detects_loop_driven_recursive_mode() -> None:
     assert _wp_config_modes(tasks) == {"0644"}
 
 
-@pytest.mark.parametrize("item_path", ["{{ item }}", "{{ item.path }}", "{{ item.dest }}"])
+@pytest.mark.parametrize(
+    "item_path",
+    [
+        "{{ item }}",
+        "{{ item.path }}",
+        "{{ item.dest }}",
+        "{{ wordpress_install_dir }}/{{ item }}",
+        "{{ wordpress_install_dir }}/{{ item.path }}",
+    ],
+)
 def test_wp_config_guard_fails_closed_on_dynamic_mode_loop(item_path: str) -> None:
     tasks = _synthetic(f"""
 - name: Runtime-discovered mode writer
@@ -667,6 +684,51 @@ def test_dynamic_mode_loop_scoped_below_config_is_safe() -> None:
   loop: '{{ upload_files.files }}'
 """)
     assert _wp_config_modes(tasks) == set()
+
+
+def test_dynamic_find_scope_cannot_traverse_to_config() -> None:
+    tasks = _synthetic("""
+- name: Unsafe discovery scope
+  ansible.builtin.find:
+    paths: '{{ wordpress_install_dir }}/wp-content/..'
+    file_type: file
+  register: discovered
+- name: Unsafe discovered writer
+  ansible.builtin.file:
+    path: '{{ item.path }}'
+    mode: '0644'
+  loop: '{{ discovered.files }}'
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
+
+
+def test_handler_config_writer_is_in_the_mode_corpus() -> None:
+    handlers = [
+        ("handlers/main.yml", task, when)
+        for _, task, when in _synthetic("""
+- name: Unsafe handler mode
+  ansible.builtin.file:
+    path: '{{ wordpress_install_dir }}/wp-config.php'
+    mode: '0644'
+""")
+    ]
+    assert _wp_config_modes(handlers) == {"0644"}
+
+
+def test_handler_config_backup_is_in_the_backup_corpus() -> None:
+    handlers = [
+        ("handlers/main.yml", task, when)
+        for _, task, when in _synthetic("""
+- name: Unsafe handler backup
+  ansible.builtin.copy:
+    dest: '{{ wordpress_install_dir }}/wp-config.php'
+    content: test
+    backup: true
+""")
+    ]
+    assert _wp_config_backup_writers(handlers) == [
+        "handlers/main.yml:Unsafe handler backup"
+    ]
 
 
 @pytest.mark.parametrize("path", ["/var/www/wordpress", "/var/www"])
