@@ -31,7 +31,7 @@
     wordpress_php_version: "8.2"
 
     # SSL/TLS configuration
-    wordpress_enable_ssl: true
+    wordpress_enable_ssl: false # Incomplete feature; missing role templates
     wordpress_generate_self_signed_cert: true
     wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
     wordpress_ssl_prefer_server_ciphers: true
@@ -41,7 +41,7 @@
     wordpress_disable_file_edit: true
     wordpress_disable_file_mods: true
     wordpress_disallow_unfiltered_html: true
-    wordpress_enable_security: true
+    wordpress_enable_security: false # Incomplete feature; missing role templates
 
     # WordPress security plugins
     wordpress_plugins:

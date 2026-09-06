@@ -33,8 +33,8 @@ WHOLE_FILE = {
 PARTIAL = {
     # "line" is the value being written, not what identifies the edit: two
     # tasks matching one regexp with different lines is last-write-wins.
-    "ansible.builtin.lineinfile": ("path", ("regexp", "insertafter", "insertbefore")),
-    "ansible.builtin.blockinfile": ("path", ("marker", "insertafter", "insertbefore")),
+    "ansible.builtin.lineinfile": ("path", ("regexp",)),
+    "ansible.builtin.blockinfile": ("path", ("marker",)),
     "ansible.builtin.replace": ("path", ("regexp",)),
     "community.general.ini_file": ("path", ("section", "option")),
 }
@@ -343,18 +343,13 @@ FEATURE_FLAG = {
 }
 
 
-# These reference a missing template from a task the operator has to opt into,
-# so the failure already lands only when the feature is asked for.
-OPT_IN = {"wpcli.yml", "themes.yml"}
-
-
 def test_every_affected_file_is_classified(baseline) -> None:
     """Nothing may fall out of the coverage check by being absent from a map."""
     affected = {entry.split(":", 1)[0] for entry in baseline}
-    unclassified = sorted(affected - set(FEATURE_FLAG) - OPT_IN)
+    unclassified = sorted(affected - set(FEATURE_FLAG))
     assert not unclassified, (
-        "these files reference missing templates but are neither feature-gated "
-        f"nor recorded as opt-in: {unclassified}"
+        "these files reference missing templates but are not feature-gated: "
+        f"{unclassified}"
     )
 
 
@@ -365,12 +360,64 @@ def test_files_with_missing_templates_fail_before_changing_anything(baseline) ->
     for filename in sorted(affected & set(FEATURE_FLAG)):
         tasks = yaml.safe_load((ROOT / "tasks" / filename).read_text()) or []
         first = tasks[0] if tasks else {}
-        if "ansible.builtin.fail" not in first:
+        if (
+            "ansible.builtin.fail" not in first
+            or "when" in first
+            or first.get("ignore_errors")
+        ):
             unguarded.append(filename)
     assert not unguarded, (
         "these files reference templates the role does not ship and would abort "
         f"partway through; give them a leading ansible.builtin.fail: {unguarded}"
     )
+
+
+def test_feature_guards_match_the_main_task_includes() -> None:
+    main = yaml.safe_load((ROOT / "tasks" / "main.yml").read_text()) or []
+    includes = {
+        task.get("ansible.builtin.include_tasks"): task.get("when")
+        for task in main
+        if task.get("ansible.builtin.include_tasks")
+    }
+    drift = {
+        filename: flag
+        for filename, flag in FEATURE_FLAG.items()
+        if flag not in str(includes.get(filename, ""))
+    }
+    assert not drift, f"feature guards do not match main.yml includes: {drift}"
+
+
+def test_examples_and_scenarios_do_not_enable_incomplete_features() -> None:
+    paths = sorted((ROOT / "examples").glob("*.yml"))
+    paths += sorted((ROOT / "tests" / "scenarios").glob("*.yml"))
+    enabled = []
+    pattern = re.compile(
+        rf"^\s*({'|'.join(map(re.escape, FEATURE_FLAG.values()))}):\s*true\s*(?:#.*)?$",
+        re.MULTILINE,
+    )
+    for path in paths:
+        if pattern.search(path.read_text()):
+            enabled.append(str(path.relative_to(ROOT)))
+    assert not enabled, f"incomplete features enabled in shipped playbooks: {enabled}"
+
+
+def test_partial_edit_anchors_do_not_hide_a_clash() -> None:
+    line_tasks = _synthetic("""
+- name: First line
+  ansible.builtin.lineinfile: {path: /x, regexp: '^same', insertafter: '^one', line: same=1}
+- name: Second line
+  ansible.builtin.lineinfile: {path: /x, regexp: '^same', insertafter: '^two', line: same=2}
+""")
+    block_tasks = _synthetic("""
+- name: First block
+  ansible.builtin.blockinfile: {path: /y, insertbefore: '^one', block: one}
+- name: Second block
+  ansible.builtin.blockinfile: {path: /y, insertbefore: '^two', block: two}
+""")
+    with pytest.raises(AssertionError, match="synthetic.yml"):
+        test_written_destinations_are_owned_by_one_task(line_tasks)
+    with pytest.raises(AssertionError, match="synthetic.yml"):
+        test_written_destinations_are_owned_by_one_task(block_tasks)
 
 
 def test_two_not_equal_conditions_are_not_exclusive() -> None:

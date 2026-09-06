@@ -55,7 +55,7 @@
     # ========================================================================
     # SSL/TLS - Self-Signed Certificate
     # ========================================================================
-    wordpress_enable_ssl: true
+    wordpress_enable_ssl: false  # Incomplete feature; missing role templates
     wordpress_use_letsencrypt: false
     wordpress_generate_self_signed_cert: true
     wordpress_ssl_certificate: "/etc/ssl/certs/wordpress-dev.crt"

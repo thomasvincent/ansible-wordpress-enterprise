@@ -65,6 +65,3 @@ missing_templates:
   - ssl.yml:apache-ssl.conf.j2
   - ssl.yml:ssl-monitor.sh.j2
   - ssl.yml:ssl-security.conf.j2
-  - themes.yml:child-theme-functions.php.j2
-  - themes.yml:child-theme-style.css.j2
-  - wpcli.yml:wp-cli.yml.j2

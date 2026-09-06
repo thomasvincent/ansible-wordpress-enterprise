@@ -52,6 +52,18 @@ def test_the_corpus_is_not_empty(distributions: list[dict]) -> None:
     assert distributions, "the support policy is empty"
 
 
+def test_every_policy_support_date_is_valid(distributions: list[dict]) -> None:
+    invalid = []
+    for distribution in distributions:
+        try:
+            datetime.date.fromisoformat(distribution["full_support_ends"])
+        except (KeyError, TypeError, ValueError):
+            invalid.append(
+                f"{distribution.get('meta_name')} {distribution.get('meta_version')}"
+            )
+    assert not invalid, f"invalid or missing full-support dates: {invalid}"
+
+
 def _reference_date() -> datetime.date:
     """UTC today, overridable so the check is reproducible on any checkout."""
     override = os.environ.get("PLATFORM_SUPPORT_DATE")

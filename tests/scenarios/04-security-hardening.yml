@@ -51,11 +51,11 @@
 
     # Web server configuration
     wordpress_web_server: "{{ 'nginx' if ansible_facts.os_family == 'Debian' else 'apache' }}"
-    wordpress_enable_ssl: true
+    wordpress_enable_ssl: false # Incomplete feature; missing role templates
     wordpress_ssl_certificate_type: "self-signed"
 
     # Caching configuration
-    wordpress_enable_caching: true
+    wordpress_enable_caching: false # Incomplete feature; missing role templates
     wordpress_cache_type: "{{ 'redis' if ansible_facts.os_family == 'Debian' else 'memcached' }}"
 
   pre_tasks:

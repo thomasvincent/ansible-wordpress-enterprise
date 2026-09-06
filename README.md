@@ -69,8 +69,8 @@ role references templates it does not ship (62 of them, listed in
 
 Turning one on stops the play immediately and names the missing templates,
 rather than aborting part way through and leaving the host half configured. The
-examples below show these flags set to `true`; they will not run until the
-templates exist.
+shipped examples keep these flags `false` so they remain runnable; treat their
+advanced-feature sections as topology references until the templates exist.
 
 ## 🌟 Features
 
