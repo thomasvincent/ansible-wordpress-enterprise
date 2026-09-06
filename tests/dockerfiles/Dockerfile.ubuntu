@@ -1,5 +1,5 @@
-# Ubuntu 22.04 test target for WordPress Enterprise testing
-FROM ubuntu:22.04
+# Ubuntu 24.04 LTS test target for WordPress Enterprise testing
+FROM ubuntu:24.04
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive

@@ -28,7 +28,7 @@
 
     # Security-focused configuration
     wordpress_web_server: "nginx"
-    wordpress_php_version: "8.2"
+    wordpress_php_version: "8.3"
 
     # SSL/TLS configuration
     wordpress_enable_ssl: false # Incomplete feature; missing role templates
@@ -82,11 +82,6 @@
       WP_DEBUG_LOG: true
       WP_DEBUG_DISPLAY: false
       SCRIPT_DEBUG: false
-
-  pre_tasks:
-    - name: Test input validation functionality
-      ansible.builtin.include_tasks: ../tasks/validate.yml
-      tags: validation
 
   roles:
     - ansible-wordpress-enterprise

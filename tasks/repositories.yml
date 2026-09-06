@@ -81,7 +81,7 @@
 
 - name: Enable PHP repository module (RHEL/CentOS 8+)
   ansible.builtin.command:
-    cmd: "dnf module enable php:remi-{{ wordpress_php_version | default('8.2') }} -y"
+    cmd: "dnf module enable php:remi-{{ wordpress_php_version }} -y"
   when:
     - ansible_facts.os_family == "RedHat"
     - ansible_facts.distribution_major_version | int >= 8

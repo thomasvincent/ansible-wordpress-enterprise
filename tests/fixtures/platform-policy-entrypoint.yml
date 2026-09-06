@@ -1,0 +1,9 @@
+---
+- name: Exercise the release gate through the supported role entry point
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_connection: local
+  roles:
+    - ansible-wordpress-enterprise

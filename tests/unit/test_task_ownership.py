@@ -18,7 +18,7 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 TASKS = sorted((ROOT / "tasks").rglob("*.y*ml"))
-EXPECTED_TASK_FILE_COUNT = 25
+EXPECTED_TASK_FILE_COUNT = 26
 TEMPLATES = ROOT / "templates"
 BASELINE = pathlib.Path(__file__).with_name("missing_templates.yml")
 DEFAULT_VALUES = yaml.safe_load((ROOT / "defaults" / "main.yml").read_text())
@@ -1076,11 +1076,13 @@ def test_files_with_missing_templates_fail_before_changing_anything(baseline) ->
 
 def test_feature_guards_match_the_main_task_includes() -> None:
     main = yaml.safe_load((ROOT / "tasks" / "main.yml").read_text()) or []
-    includes = {
-        task.get("ansible.builtin.include_tasks"): task.get("when")
-        for task in main
-        if task.get("ansible.builtin.include_tasks")
-    }
+    includes = {}
+    for task in main:
+        include = task.get("ansible.builtin.include_tasks")
+        if not include:
+            continue
+        filename = include.get("file") if isinstance(include, dict) else include
+        includes[filename] = task.get("when")
     drift = {
         filename: flag
         for filename, flag in FEATURE_FLAG.items()

@@ -34,7 +34,7 @@
     wordpress_https_port: 443
 
     # PHP configuration
-    wordpress_php_version: "8.1"
+    wordpress_php_version: "8.3"
     wordpress_php_memory_limit: "256M"
     wordpress_php_max_execution_time: "300"
     wordpress_php_upload_max_filesize: "64M"

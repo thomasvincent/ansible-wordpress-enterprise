@@ -1,0 +1,12 @@
+---
+- name: Exercise the release gate without touching packages
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_connection: local
+  tasks:
+    - name: Run the role platform preflight
+      ansible.builtin.include_role:
+        name: ansible-wordpress-enterprise
+        tasks_from: platform_policy.yml
