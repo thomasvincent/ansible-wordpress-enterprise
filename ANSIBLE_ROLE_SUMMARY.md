@@ -332,7 +332,7 @@ molecule test -s rhel-apache
 - Plugin/theme updates: 1-3 minutes
 
 ### Resource Usage
-- Minimal: PHP 8.2, 256MB memory
+- Minimal: PHP 8.3, 256MB memory
 - Recommended: PHP 8.3, 512MB memory
 - Production: PHP 8.3, 1GB+ memory with external services
 

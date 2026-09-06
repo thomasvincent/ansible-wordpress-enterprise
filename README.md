@@ -98,7 +98,7 @@ advanced-feature sections as topology references until the templates exist.
 - PHP version: 8.3 (supported upstream and exercised on every CI platform)
 - OPcache optimization
 - PHP-FPM tuning
-- Multiple PHP version support
+- Policy-gated PHP release support
 
 ✅ **Database Engines**
 - MySQL 8.0+
