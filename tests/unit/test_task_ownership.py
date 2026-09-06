@@ -9,6 +9,7 @@ name and intra-file duplicates count.
 from __future__ import annotations
 
 import collections
+import functools
 import pathlib
 import re
 
@@ -59,7 +60,6 @@ EXCLUSIVE_FILES = ({"webserver_apache.yml", "webserver_nginx.yml"},)
 WHOLE_PARTIAL_ALLOWED = {
     "{{expr:'/etc/redis/redis.conf' if ansible_facts.os_family == 'Debian' else '/etc/redis.conf'}}",
     "/etc/fail2ban/jail.local",
-    "{{wordpress_php_fpm_pool_path}}",
     "{{wordpress_install_dir}}/wp-config.php",
 }
 
@@ -255,18 +255,27 @@ def _normalise_file_value(value) -> str:
     return _normalise(rendered)
 
 
+@functools.cache
+def _starts_with_unconditional_failure(filename: str) -> bool:
+    source = ROOT / "tasks" / filename
+    source_tasks = yaml.safe_load(source.read_text()) or [] if source.is_file() else []
+    first = source_tasks[0] if source_tasks else {}
+    return (
+        "ansible.builtin.fail" in first
+        and "when" not in first
+        and not first.get("ignore_errors")
+    )
+
+
 def _file_attribute_writers(all_tasks):
     writers = collections.defaultdict(list)
     for filename, task, when in all_tasks:
-        # These task files stop unconditionally before any state-changing task.
-        if filename in FEATURE_FLAG:
+        if _starts_with_unconditional_failure(filename):
             continue
         body = task.get("ansible.builtin.file")
         if not isinstance(body, dict) or not isinstance(body.get("path"), str):
             continue
         loop = task.get("loop")
-        if "item" in body["path"] and not isinstance(loop, list):
-            continue
         items = loop if isinstance(loop, list) and "item" in body["path"] else [None]
         for item in items:
             target = _normalise(
@@ -310,18 +319,55 @@ def test_allowed_file_transitions_are_ordered(all_tasks) -> None:
         assert positions == sorted(positions), f"file transition is out of order: {key}"
 
 
-def test_wp_config_is_never_made_world_readable(all_tasks) -> None:
+def _wp_config_modes(all_tasks) -> set[str]:
     target = "{{wordpress_install_dir}}/wp-config.php"
-    modes = {
-        _normalise_file_value(task["ansible.builtin.file"]["mode"])
-        for _, task, _ in all_tasks
-        if isinstance(task.get("ansible.builtin.file"), dict)
-        and isinstance(task["ansible.builtin.file"].get("path"), str)
-        and _normalise(task["ansible.builtin.file"]["path"]) == target
-        and "mode" in task["ansible.builtin.file"]
+    mode_modules = {
+        "ansible.builtin.file": "path",
+        "ansible.builtin.template": "dest",
+        "ansible.builtin.copy": "dest",
     }
+    modes = set()
+    for _, task, _ in all_tasks:
+        for module, destination in mode_modules.items():
+            body = task.get(module)
+            if (
+                isinstance(body, dict)
+                and isinstance(body.get(destination), str)
+                and _normalise(body[destination]) == target
+                and "mode" in body
+            ):
+                modes.add(_normalise_file_value(body["mode"]))
+    return modes
+
+
+def test_wp_config_is_never_made_world_readable(all_tasks) -> None:
+    modes = _wp_config_modes(all_tasks)
     assert modes, "no task protects wp-config.php"
     assert modes == {"0600"}, f"wp-config.php has unsafe mode writers: {sorted(modes)}"
+
+    unsafe_sweeps = []
+    for filename, task, _ in all_tasks:
+        body = task.get("ansible.builtin.command")
+        command = body.get("cmd", "") if isinstance(body, dict) else ""
+        if (
+            "chmod" in command
+            and "wordpress_install_dir" in command
+            and "-type f" in command
+            and "! -name wp-config.php" not in command
+        ):
+            unsafe_sweeps.append(f"{filename}:{task.get('name')}")
+    assert not unsafe_sweeps, f"chmod sweeps include wp-config.php: {unsafe_sweeps}"
+
+
+def test_wp_config_guard_detects_an_unsafe_template() -> None:
+    tasks = _synthetic("""
+- name: Unsafe config
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: '{{ wordpress_install_dir }}/wp-config.php'
+    mode: '0644'
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
 
 
 def test_written_destinations_are_owned_by_one_task(all_tasks) -> None:
@@ -447,6 +493,8 @@ def test_every_affected_file_is_classified(baseline) -> None:
         "these files reference missing templates but are not feature-gated: "
         f"{unclassified}"
     )
+    stale = sorted(set(FEATURE_FLAG) - affected)
+    assert not stale, f"feature files no longer fail closed; remove their guards: {stale}"
 
 
 def test_files_with_missing_templates_fail_before_changing_anything(baseline) -> None:
@@ -514,6 +562,38 @@ def test_partial_edit_anchors_do_not_hide_a_clash() -> None:
         test_written_destinations_are_owned_by_one_task(line_tasks)
     with pytest.raises(AssertionError, match="synthetic.yml"):
         test_written_destinations_are_owned_by_one_task(block_tasks)
+
+
+def test_dynamic_file_loop_is_recorded() -> None:
+    tasks = _synthetic("""
+- name: Dynamic files
+  ansible.builtin.file:
+    path: '{{ item.path }}'
+    mode: '0644'
+  loop: '{{ discovered.files }}'
+""")
+    writers = _file_attribute_writers(tasks)
+    assert ("{{item.path}}", "mode") in writers
+
+
+def test_whole_partial_allowlist_has_no_stale_entries(all_tasks) -> None:
+    whole = collections.Counter()
+    partial = collections.Counter()
+    for _, task, _ in all_tasks:
+        for module, key in WHOLE_FILE.items():
+            body = task.get(module)
+            if isinstance(body, dict) and isinstance(body.get(key), str):
+                whole[_normalise(body[key])] += 1
+        for module, (key, _) in PARTIAL.items():
+            body = task.get(module)
+            if isinstance(body, dict) and isinstance(body.get(key), str):
+                partial[_normalise(body[key])] += 1
+    stale = sorted(
+        target
+        for target in WHOLE_PARTIAL_ALLOWED
+        if not whole[target] or not partial[target]
+    )
+    assert not stale, f"stale whole/partial ownership exemptions: {stale}"
 
 
 def test_conflicting_file_modes_are_reported() -> None:
