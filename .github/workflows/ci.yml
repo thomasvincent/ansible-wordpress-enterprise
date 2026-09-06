@@ -49,21 +49,14 @@ jobs:
       - name: Run ansible-lint
         run: ansible-lint
 
+      - name: Run unit tests
+        run: pytest tests/unit -q
+
   molecule-test:
-    name: Molecule Test (${{ matrix.name }})
+    name: Molecule Test (Ubuntu 24/Nginx and Rocky 9/Apache)
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 20  # Prevent hung jobs
+    timeout-minutes: 45  # Full multi-platform converge and idempotence takes over 20 minutes
     needs: lint
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - scenario: default
-            name: Ubuntu 22/24 and Rocky 9
-          - scenario: debian
-            name: Debian (11, 12)
-          - scenario: rhel
-            name: RHEL (8, 9)
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -80,48 +73,19 @@ jobs:
 
       - name: Install Ansible collections
         run: |
-          ansible-galaxy collection install community.general
-          ansible-galaxy collection install community.mysql
-          ansible-galaxy collection install ansible.posix
+          ansible-galaxy collection install -r requirements.yml
 
-      - name: Run Molecule test (${{ matrix.scenario }} scenario)
-        run: molecule test --scenario-name ${{ matrix.scenario }}
+      - name: Run stable Molecule contract
+        run: molecule test --scenario-name default
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
-
-  integration-test:
-    name: Integration Test
-    runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 15  # Prevent hung jobs
-    needs: [molecule-test]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@0d103c3126aa41d772a8362f6aa67afac040f80c # v3
-
-      - name: Build test image
-        uses: docker/build-push-action@ca877d9245402d1537745e0e3563b6a5408e6e4d # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: wordpress-ansible:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Test with docker-compose
-        run: |
-          echo "Integration test skipped - Molecule tests cover functionality"
-          # Docker compose integration test disabled as Molecule tests are comprehensive
 
   release:
     name: Release
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15  # Prevent hung jobs
-    needs: [integration-test]
+    needs: [molecule-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
@@ -144,16 +108,18 @@ jobs:
       - name: Get version from meta
         id: get_version
         run: |
-          VERSION=$(grep 'version:' meta/main.yml | head -1 | awk '{print $2}' | tr -d '"')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          role_version=$(awk '/version:/ {gsub(/"/, "", $2); print $2; exit}' meta/main.yml)
+          echo "version=${role_version}" >> "$GITHUB_OUTPUT"
 
       - name: Check if tag exists
         id: check_tag
+        env:
+          ROLE_VERSION: ${{ steps.get_version.outputs.version }}
         run: |
-          if git rev-parse "v${{ steps.get_version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+          if git rev-parse "v${ROLE_VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create Release

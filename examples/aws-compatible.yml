@@ -87,7 +87,7 @@
     # ========================================================================
     # SSL/TLS (AWS Certificate Manager)
     # ========================================================================
-    wordpress_enable_ssl: true
+    wordpress_enable_ssl: false  # Incomplete feature; missing role templates
     wordpress_use_letsencrypt: true
     wordpress_letsencrypt_email: "ssl@example.com"
     wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
@@ -126,8 +126,8 @@
     # ========================================================================
     # Security
     # ========================================================================
-    wordpress_enable_fail2ban: true
-    wordpress_configure_firewall: true
+    wordpress_enable_fail2ban: false  # Incomplete feature; missing role templates
+    wordpress_configure_firewall: false  # Incomplete feature; missing role templates
     wordpress_disable_file_edit: true
     wordpress_force_ssl_admin: true
     wordpress_disallow_unfiltered_html: true
@@ -140,7 +140,7 @@
     # ========================================================================
     # Backups to S3
     # ========================================================================
-    wordpress_enable_backups: true
+    wordpress_enable_backups: false  # Incomplete feature; missing role templates
     wordpress_backup_dir: "/var/backups/wordpress"
     wordpress_backup_retention_days: 30
     wordpress_backup_to_cloud: true

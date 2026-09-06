@@ -1,23 +1,10 @@
 ---
 # WordPress Installation Tasks
 
-- name: Create WordPress system user
-  ansible.builtin.user:
-    name: "{{ wordpress_system_user }}"
-    group: "{{ wordpress_system_group }}"
-    system: true
-    shell: /bin/bash
-    home: "{{ wordpress_install_dir }}"
-    create_home: false
-    state: present
-  become: true
-
-- name: Create WordPress system group
-  ansible.builtin.group:
-    name: "{{ wordpress_system_group }}"
-    system: true
-    state: present
-  become: true
+- name: Check whether WordPress core is already present
+  ansible.builtin.stat:
+    path: "{{ wordpress_install_dir }}/wp-includes/version.php"
+  register: wordpress_core_present
 
 - name: Create WordPress installation directory
   ansible.builtin.file:
@@ -34,6 +21,7 @@
     state: directory
     mode: '0755'
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Download WordPress
   ansible.builtin.get_url:
@@ -43,7 +31,14 @@
     timeout: 300
   become: true
   register: wordpress_download
-  when: wordpress_version != "latest"
+  when:
+    - wordpress_version != "latest"
+    - not wordpress_core_present.stat.exists
+  # wordpress.org rate-limits, and several hosts converging at once from one
+  # address is enough to trigger it.
+  retries: 5
+  delay: 10
+  until: wordpress_download is succeeded
 
 - name: Download latest WordPress
   ansible.builtin.get_url:
@@ -53,7 +48,12 @@
     timeout: 300
   become: true
   register: wordpress_download_latest
-  when: wordpress_version == "latest"
+  when:
+    - wordpress_version == "latest"
+    - not wordpress_core_present.stat.exists
+  retries: 5
+  delay: 10
+  until: wordpress_download_latest is succeeded
 
 - name: Extract WordPress archive
   ansible.builtin.unarchive:
@@ -63,6 +63,7 @@
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Check if WordPress is already installed
   ansible.builtin.stat:
@@ -78,7 +79,7 @@
     group: "{{ wordpress_system_group }}"
     mode: preserve
   become: true
-  when: not wordpress_installed.stat.exists
+  when: not wordpress_core_present.stat.exists
 
 - name: Set proper ownership for WordPress files
   ansible.builtin.file:
@@ -88,34 +89,6 @@
     group: "{{ wordpress_system_group }}"
     recurse: true
   become: true
-
-- name: Set proper permissions for WordPress directories
-  ansible.builtin.find:
-    paths: "{{ wordpress_install_dir }}"
-    file_type: directory
-    recurse: true
-  register: wordpress_directories
-
-- name: Apply directory permissions
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    mode: "{{ wordpress_dir_permissions }}"
-  become: true
-  loop: "{{ wordpress_directories.files }}"
-
-- name: Set proper permissions for WordPress files
-  ansible.builtin.find:
-    paths: "{{ wordpress_install_dir }}"
-    file_type: file
-    recurse: true
-  register: wordpress_files
-
-- name: Apply file permissions
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    mode: "{{ wordpress_file_permissions }}"
-  become: true
-  loop: "{{ wordpress_files.files }}"
 
 - name: Create wp-content uploads directory
   ansible.builtin.file:
@@ -153,35 +126,13 @@
   become: true
   when: wordpress_installed.stat.exists
 
-- name: Download and install WP-CLI
-  ansible.builtin.get_url:
-    url: >-
-      https://raw.githubusercontent.com/wp-cli/wp-cli/v{{
-      wordpress_wpcli_version | default('2.9.0') }}/utils/wp-cli.phar
-    dest: /usr/local/bin/wp
-    mode: '0755'
-    owner: root
-    group: root
-  become: true
-  when:
-    - wordpress_install_wpcli | bool
-    - wordpress_wpcli_version != "latest"
-
-- name: Download and install latest WP-CLI
-  ansible.builtin.get_url:
-    url: "https://raw.githubusercontent.com/wp-cli/wp-cli/v2/utils/wp-cli.phar"
-    dest: /usr/local/bin/wp
-    mode: '0755'
-    owner: root
-    group: root
-  become: true
-  when:
-    - wordpress_install_wpcli | bool
-    - wordpress_wpcli_version == "latest"
+- name: Install WP-CLI
+  ansible.builtin.include_tasks: wpcli.yml
+  when: wordpress_install_wpcli | bool
 
 - name: Verify WP-CLI installation
   ansible.builtin.command:
-    cmd: wp --info
+    cmd: "{{ wordpress_wpcli_bin }} --info"
   become: true
   become_user: "{{ wordpress_system_user }}"
   register: wpcli_info
@@ -209,6 +160,8 @@
   ansible.builtin.file:
     path: "{{ wordpress_error_log }}"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ wordpress_php_fpm_user }}"
     group: "{{ wordpress_php_fpm_group }}"
     mode: '0644'
@@ -240,6 +193,7 @@
     path: "/tmp/wordpress-download"
     state: absent
   become: true
+  when: not wordpress_core_present.stat.exists
 
 - name: Check WordPress installation status
   ansible.builtin.stat:
