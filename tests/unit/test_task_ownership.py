@@ -17,7 +17,8 @@ import pytest
 import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TASKS = sorted((ROOT / "tasks").glob("*.yml"))
+TASKS = sorted((ROOT / "tasks").rglob("*.y*ml"))
+EXPECTED_TASK_FILE_COUNT = 25
 TEMPLATES = ROOT / "templates"
 BASELINE = pathlib.Path(__file__).with_name("missing_templates.yml")
 DEFAULT_VALUES = yaml.safe_load((ROOT / "defaults" / "main.yml").read_text())
@@ -94,7 +95,7 @@ def _walk(node, when=()):
 def _tasks():
     for path in TASKS:
         for task, when in _walk(yaml.safe_load(path.read_text()) or []):
-            yield path.name, task, when
+            yield str(path.relative_to(ROOT / "tasks")), task, when
 
 
 @pytest.fixture(scope="module")
@@ -170,6 +171,10 @@ def _exclusive(conditions: list[tuple]) -> bool:
 
 def test_the_corpus_is_not_empty(all_tasks) -> None:
     assert TASKS, "no task files found; the glob or the layout changed"
+    assert len(TASKS) == EXPECTED_TASK_FILE_COUNT, (
+        f"task-file corpus changed from {EXPECTED_TASK_FILE_COUNT} to {len(TASKS)}; "
+        "review the new or relocated files and update the pin deliberately"
+    )
     assert len(all_tasks) > 100, f"only {len(all_tasks)} tasks parsed"
 
 
@@ -407,28 +412,32 @@ def _wp_config_modes(all_tasks) -> set[str]:
                     ))
                 )
                 writes_config = direct_config or recursively_reaches_config
-                if writes_config and mode is not None:
-                    modes.add(_normalise_file_value(mode))
+                if writes_config:
+                    if mode is not None:
+                        modes.add(_normalise_file_value(mode))
+                    elif direct_config:
+                        modes.add("MISSING")
         for module in ("ansible.builtin.command", "ansible.builtin.shell"):
             command = _command_text(task, module)
-            if "wp-config.php" not in command:
-                continue
-            if re.search(
-                r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
-                command,
-            ):
-                continue
-            chmod_mode = re.search(r"\bchmod\b(?:\s+-\S+)*\s+([0-7]{3,4})\b", command)
-            install_mode = re.search(r"\binstall\b.*?\s-m\s+([0-7]{3,4})\b", command)
-            mode_match = chmod_mode or install_mode
-            if mode_match:
-                modes.add(mode_match.group(1).lstrip("0").zfill(4))
-                continue
-            variable_mode = re.search(
-                r"\b(?:chmod|install\s+-m)\b.*?\{\{\s*([A-Za-z_]\w*)", command
-            )
-            if variable_mode and variable_mode.group(1) in DEFAULT_VALUES:
-                modes.add(_normalise_file_value(f"{{{{ {variable_mode.group(1)} }}}}"))
+            for statement in _command_statements(command):
+                if "wp-config.php" not in statement:
+                    continue
+                if re.search(
+                    r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
+                    statement,
+                ):
+                    continue
+                chmod_mode = re.search(r"\bchmod\b(?:\s+-\S+)*\s+([0-7]{3,4})\b", statement)
+                install_mode = re.search(r"\binstall\b.*?\s-m\s+([0-7]{3,4})\b", statement)
+                mode_match = chmod_mode or install_mode
+                if mode_match:
+                    modes.add(mode_match.group(1).lstrip("0").zfill(4))
+                    continue
+                variable_mode = re.search(
+                    r"\b(?:chmod|install\s+-m)\b.*?\{\{\s*([A-Za-z_]\w*)", statement
+                )
+                if variable_mode and variable_mode.group(1) in DEFAULT_VALUES:
+                    modes.add(_normalise_file_value(f"{{{{ {variable_mode.group(1)} }}}}"))
     return modes
 
 
@@ -445,6 +454,10 @@ def _command_text(task: dict, module: str) -> str:
     return ""
 
 
+def _command_statements(command: str) -> list[str]:
+    return re.split(r"\s*(?:(?<!\\);|&&|\|\||\n)\s*", command)
+
+
 def _unsafe_wp_config_sweeps(all_tasks) -> list[str]:
     unsafe = []
     install_root = str(DEFAULT_VALUES["wordpress_install_dir"])
@@ -456,7 +469,7 @@ def _unsafe_wp_config_sweeps(all_tasks) -> list[str]:
             "ansible.builtin.script",
         ):
             command = _command_text(task, module)
-            for statement in re.split(r"\s*(?:(?<!\\);|&&|\|\||\n)\s*", command):
+            for statement in _command_statements(command):
                 recursive_chmod = "chmod" in statement and re.search(
                     r"(?:^|\s)(?:--recursive|-\S*R\S*)(?:\s|$)", statement
                 )
@@ -466,10 +479,25 @@ def _unsafe_wp_config_sweeps(all_tasks) -> list[str]:
                 find_chmod = "find " in statement and "chmod" in statement
                 candidates = [statement]
                 if find_chmod and "-type " in statement:
-                    candidates = re.split(r"(?=-type\s+[df]\b)", statement)
+                    branch_source = re.sub(
+                        r"(?:!|-not)\s+-type\s+([df])\b",
+                        r"__negated_type_\1__",
+                        statement,
+                    )
+                    candidates = re.split(r"(?=-type\s+[df]\b)", branch_source)
                 for candidate in candidates:
-                    candidate_chmods_files = "chmod" in candidate and "-type d" not in candidate
-                    touches_files = bool(recursive_chmod) or candidate_chmods_files
+                    candidate_changes_config = bool(re.search(
+                        r"\binstall\b.*?\s-m\s+\S+.*wp-config\.php",
+                        candidate,
+                    ))
+                    candidate_chmods_files = (
+                        "chmod" in candidate and "-type d" not in candidate
+                    )
+                    touches_files = (
+                        bool(recursive_chmod)
+                        or candidate_chmods_files
+                        or candidate_changes_config
+                    )
                     excludes_config_family = re.search(
                         r"(?:!|-not)\s+-name\s+['\"]?wp-config\.php\*['\"]?",
                         candidate,
@@ -543,6 +571,16 @@ def test_wp_config_guard_detects_config_path_spellings(destination: str) -> None
     mode: '0644'
 """)
     assert _wp_config_modes(tasks) == {"0644"}
+
+
+def test_wp_config_guard_rejects_a_mode_less_writer() -> None:
+    tasks = _synthetic("""
+- name: Mode-less config copy
+  ansible.builtin.copy:
+    content: test
+    dest: '{{ wordpress_install_dir }}/wp-config.php'
+""")
+    assert _wp_config_modes(tasks) == {"MISSING"}
 
 
 @pytest.mark.parametrize(
@@ -749,6 +787,16 @@ def test_exclusion_on_one_shell_line_does_not_exempt_another() -> None:
     assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Multiline unsafe sweep"]
 
 
+def test_exclusion_on_one_line_does_not_hide_direct_mode_writer() -> None:
+    tasks = _synthetic("""
+- name: Multiline direct writer
+  ansible.builtin.shell: |
+    find {{ wordpress_install_dir }} -type f ! -name 'wp-config.php*' -exec chmod 0644 {} +
+    install -m 0644 source {{ wordpress_install_dir }}/wp-config.php
+""")
+    assert _wp_config_modes(tasks) == {"0644"}
+
+
 def test_directory_branch_exclusion_does_not_exempt_file_branch() -> None:
     tasks = _synthetic("""
 - name: Wrong-branch exclusion
@@ -758,6 +806,26 @@ def test_directory_branch_exclusion_does_not_exempt_file_branch() -> None:
     -o ( -type f -exec chmod 0644 {} + )
 """)
     assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Wrong-branch exclusion"]
+
+
+@pytest.mark.parametrize("negation", ["!", "-not"])
+def test_negated_directory_type_is_treated_as_a_file_sweep(negation: str) -> None:
+    tasks = _synthetic(f"""
+- name: Negated directory sweep
+  ansible.builtin.command: >-
+    find {{{{ wordpress_install_dir }}}} {negation} -type d
+    -exec chmod 0666 {{}} +
+""")
+    assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Negated directory sweep"]
+
+
+def test_install_mode_writer_is_part_of_the_sweep_guard() -> None:
+    tasks = _synthetic("""
+- name: Unsafe install mode
+  ansible.builtin.command: >-
+    install -m 0644 source {{ wordpress_install_dir }}/wp-config.php
+""")
+    assert _unsafe_wp_config_sweeps(tasks) == ["synthetic.yml:Unsafe install mode"]
 
 
 def test_written_destinations_are_owned_by_one_task(all_tasks) -> None:
@@ -885,6 +953,14 @@ def test_every_affected_file_is_classified(baseline) -> None:
     )
     stale = sorted(set(FEATURE_FLAG) - affected)
     assert not stale, f"feature files no longer fail closed; remove their guards: {stale}"
+
+
+def test_fail_closed_file_attribute_exclusions_are_explicit() -> None:
+    skipped = {path.name for path in TASKS if _starts_with_unconditional_failure(path.name)}
+    assert skipped == set(FEATURE_FLAG), (
+        "file-attribute writers are skipped only in reviewed fail-closed features: "
+        f"{sorted(skipped)}"
+    )
 
 
 def test_files_with_missing_templates_fail_before_changing_anything(baseline) -> None:
