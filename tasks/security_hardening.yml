@@ -65,7 +65,7 @@
     - name: Set secure permissions on WordPress configuration
       ansible.builtin.file:
         path: "{{ wordpress_install_dir }}/wp-config.php"
-        mode: "0644"
+        mode: "0600"
         owner: "{{ wordpress_system_user }}"
         group: "{{ wordpress_system_group }}"
       become: true

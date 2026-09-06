@@ -19,6 +19,17 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 TASKS = sorted((ROOT / "tasks").glob("*.yml"))
 TEMPLATES = ROOT / "templates"
 BASELINE = pathlib.Path(__file__).with_name("missing_templates.yml")
+DEFAULT_VALUES = yaml.safe_load((ROOT / "defaults" / "main.yml").read_text())
+
+FEATURE_FLAG = {
+    "backups.yml": "wordpress_enable_backups",
+    "caching.yml": "wordpress_enable_caching",
+    "fail2ban.yml": "wordpress_enable_fail2ban",
+    "firewall.yml": "wordpress_configure_firewall",
+    "monitoring.yml": "wordpress_enable_monitoring",
+    "security.yml": "wordpress_enable_security",
+    "ssl.yml": "wordpress_enable_ssl",
+}
 
 # Modules that render a whole file: two of them on one destination conflict.
 WHOLE_FILE = {
@@ -217,6 +228,102 @@ def _destinations(all_tasks):
     return owners
 
 
+FILE_ATTRIBUTES = ("mode", "owner", "group", "state")
+FILE_ATTRIBUTE_TRANSITIONS = {
+    # A disposable download workspace is created before extraction and removed
+    # after the installation has completed.
+    ("/tmp/wordpress-download", "state"): ("directory", "absent"),
+}
+
+
+def _render_loop_item(value, item) -> str:
+    rendered = str(value)
+    if isinstance(item, dict):
+        return re.sub(
+            r"\{\{\s*item\.([A-Za-z_]\w*)\s*\}\}",
+            lambda match: str(item.get(match.group(1))),
+            rendered,
+        )
+    return re.sub(r"\{\{\s*item\s*\}\}", str(item), rendered)
+
+
+def _normalise_file_value(value) -> str:
+    rendered = str(value)
+    expression = re.fullmatch(r"\{\{\s*([A-Za-z_]\w*)(?:\s*\|.*?)?\s*\}\}", rendered)
+    if expression and expression.group(1) in DEFAULT_VALUES:
+        return str(DEFAULT_VALUES[expression.group(1)])
+    return _normalise(rendered)
+
+
+def _file_attribute_writers(all_tasks):
+    writers = collections.defaultdict(list)
+    for filename, task, when in all_tasks:
+        # These task files stop unconditionally before any state-changing task.
+        if filename in FEATURE_FLAG:
+            continue
+        body = task.get("ansible.builtin.file")
+        if not isinstance(body, dict) or not isinstance(body.get("path"), str):
+            continue
+        loop = task.get("loop")
+        if "item" in body["path"] and not isinstance(loop, list):
+            continue
+        items = loop if isinstance(loop, list) and "item" in body["path"] else [None]
+        for item in items:
+            target = _normalise(
+                body["path"] if item is None else _render_loop_item(body["path"], item)
+            )
+            for attribute in FILE_ATTRIBUTES:
+                if attribute in body:
+                    value = body[attribute]
+                    if item is not None:
+                        value = _render_loop_item(value, item)
+                    writers[(target, attribute)].append(
+                        (_normalise_file_value(value), f"{filename}:{task.get('name')}", when)
+                    )
+    return writers
+
+
+def test_file_attributes_do_not_conflict(all_tasks) -> None:
+    clashes = {}
+    for (target, attribute), writers in _file_attribute_writers(all_tasks).items():
+        transition = FILE_ATTRIBUTE_TRANSITIONS.get((target, attribute))
+        if transition and set(transition) == {value for value, _, _ in writers}:
+            continue
+        conflicts = []
+        for index, (value, label, conditions) in enumerate(writers):
+            for other_value, other_label, other_conditions in writers[index + 1:]:
+                if value == other_value:
+                    continue
+                if _exclusive([conditions, other_conditions]):
+                    continue
+                conflicts.extend((f"{label}={value}", f"{other_label}={other_value}"))
+        if conflicts:
+            clashes[f"{target}:{attribute}"] = sorted(set(conflicts))
+    assert not clashes, f"file attributes have conflicting writers: {clashes}"
+
+
+def test_allowed_file_transitions_are_ordered(all_tasks) -> None:
+    writers = _file_attribute_writers(all_tasks)
+    for key, transition in FILE_ATTRIBUTE_TRANSITIONS.items():
+        actual = [value for value, _, _ in writers[key]]
+        positions = [actual.index(value) for value in transition]
+        assert positions == sorted(positions), f"file transition is out of order: {key}"
+
+
+def test_wp_config_is_never_made_world_readable(all_tasks) -> None:
+    target = "{{wordpress_install_dir}}/wp-config.php"
+    modes = {
+        _normalise_file_value(task["ansible.builtin.file"]["mode"])
+        for _, task, _ in all_tasks
+        if isinstance(task.get("ansible.builtin.file"), dict)
+        and isinstance(task["ansible.builtin.file"].get("path"), str)
+        and _normalise(task["ansible.builtin.file"]["path"]) == target
+        and "mode" in task["ansible.builtin.file"]
+    }
+    assert modes, "no task protects wp-config.php"
+    assert modes == {"0600"}, f"wp-config.php has unsafe mode writers: {sorted(modes)}"
+
+
 def test_written_destinations_are_owned_by_one_task(all_tasks) -> None:
     owners = _destinations(all_tasks)
     clash = {}
@@ -265,10 +372,10 @@ def test_the_missing_template_baseline_has_no_stale_entries(all_tasks, baseline)
 
 def test_the_missing_template_baseline_never_grows(baseline: set[str]) -> None:
     """The debt is capped at what was recorded when the ratchet went in."""
-    recorded = 62
-    assert len(baseline) <= recorded, (
-        f"the baseline grew to {len(baseline)} from {recorded}; "
-        "it is a ratchet, not a bucket"
+    recorded = 59
+    assert len(baseline) == recorded, (
+        f"the baseline changed to {len(baseline)} from {recorded}; update the "
+        "ratchet deliberately when missing templates are added or supplied"
     )
 
 
@@ -331,17 +438,6 @@ def test_the_same_partial_edit_twice_is_reported() -> None:
 
 
 # --- a broken feature must stop before it changes anything -----------------
-
-FEATURE_FLAG = {
-    "backups.yml": "wordpress_enable_backups",
-    "caching.yml": "wordpress_enable_caching",
-    "fail2ban.yml": "wordpress_enable_fail2ban",
-    "firewall.yml": "wordpress_configure_firewall",
-    "monitoring.yml": "wordpress_enable_monitoring",
-    "security.yml": "wordpress_enable_security",
-    "ssl.yml": "wordpress_enable_ssl",
-}
-
 
 def test_every_affected_file_is_classified(baseline) -> None:
     """Nothing may fall out of the coverage check by being absent from a map."""
@@ -418,6 +514,29 @@ def test_partial_edit_anchors_do_not_hide_a_clash() -> None:
         test_written_destinations_are_owned_by_one_task(line_tasks)
     with pytest.raises(AssertionError, match="synthetic.yml"):
         test_written_destinations_are_owned_by_one_task(block_tasks)
+
+
+def test_conflicting_file_modes_are_reported() -> None:
+    tasks = _synthetic("""
+- name: Loose
+  ansible.builtin.file: {path: /secret, mode: '0644'}
+- name: Strict
+  ansible.builtin.file: {path: /secret, mode: '0600'}
+""")
+    with pytest.raises(AssertionError, match="/secret:mode"):
+        test_file_attributes_do_not_conflict(tasks)
+
+
+def test_compatible_file_attributes_are_allowed() -> None:
+    tasks = _synthetic("""
+- name: Own directory
+  ansible.builtin.file: {path: /data, owner: app}
+- name: Create directory
+  ansible.builtin.file: {path: /data, state: directory}
+- name: Confirm owner
+  ansible.builtin.file: {path: /data, owner: app}
+""")
+    test_file_attributes_do_not_conflict(tasks)
 
 
 def test_two_not_equal_conditions_are_not_exclusive() -> None:

@@ -54,7 +54,7 @@ platforms. They will be promoted only after they pass the same pinned-image,
 end-to-end contract without platform-specific exceptions.
 
 These features are **off by default and do not currently work**, because the
-role references templates it does not ship (62 of them, listed in
+role references templates it does not ship (59 of them, listed in
 `tests/unit/missing_templates.yml`):
 
 | Flag | Missing templates |
