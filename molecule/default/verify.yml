@@ -1,96 +1,96 @@
 ---
-- name: Verify
+- name: Verify the stable platform contract
   hosts: all
   gather_facts: true
   become: true
-  
+
+  vars:
+    expected_web_service: "{{ 'nginx' if ansible_facts.os_family == 'Debian' else 'httpd' }}"
+    expected_php_service: "{{ 'php' ~ wordpress_php_version ~ '-fpm' if ansible_facts.os_family == 'Debian' else 'php-fpm' }}"
+
   tasks:
-    - name: Check WordPress directory exists
-      ansible.builtin.stat:
-        path: /var/www/wordpress
-      register: wordpress_dir
-      failed_when: not wordpress_dir.stat.exists
+    - name: Collect service state
+      ansible.builtin.service_facts:
 
-    - name: Check WordPress is installed
-      ansible.builtin.stat:
-        path: /var/www/wordpress/wp-config.php
-      register: wp_config
-      failed_when: not wp_config.stat.exists
-
-    - name: Check web server is running (Apache)
-      ansible.builtin.systemd:
-        name: apache2
-        state: started
-      check_mode: true
-      when: ansible_os_family == "Debian"
-      register: apache_status
-      failed_when: false
-
-    - name: Check web server is running (httpd)
-      ansible.builtin.systemd:
-        name: httpd
-        state: started
-      check_mode: true
-      when: ansible_os_family == "RedHat"
-      register: httpd_status
-      failed_when: false
-
-    - name: Verify web server is active
+    - name: Verify required services are running
       ansible.builtin.assert:
         that:
-          - (ansible_os_family == "Debian" and apache_status is defined) or
-            (ansible_os_family == "RedHat" and httpd_status is defined)
-        fail_msg: "Web server is not configured properly"
+          - ansible_facts.services[expected_web_service ~ '.service'].state == 'running'
+          - ansible_facts.services[expected_php_service ~ '.service'].state == 'running'
+          - ansible_facts.services['mariadb.service'].state == 'running'
+        fail_msg: Required WordPress services are not running
 
-    - name: Check PHP is installed
-      ansible.builtin.command: php --version
-      register: php_version
+    - name: Validate web server configuration
+      ansible.builtin.command:
+        cmd: "{{ 'nginx -t' if wordpress_web_server == 'nginx' else 'apachectl configtest' }}"
       changed_when: false
-      failed_when: php_version.rc != 0
 
-    - name: Check database service is running (MySQL/MariaDB)
-      ansible.builtin.systemd:
-        name: "{{ item }}"
-        state: started
-      check_mode: true
-      loop:
-        - mysql
-        - mariadb
-      register: db_status
-      failed_when: false
-      when: not wordpress_use_external_db | default(false)
-
-    - name: Verify database is accessible
-      ansible.builtin.command: mysql -u{{ wordpress_db_user }} -p{{ wordpress_db_password }} -h{{ wordpress_db_host }} -e "SHOW DATABASES;"
-      register: db_check
+    - name: Verify PHP is executable
+      ansible.builtin.command:
+        cmd: php --version
+      register: php_version_output
       changed_when: false
-      failed_when: db_check.rc != 0
-      no_log: true
-      when: not wordpress_use_external_db | default(false)
 
-    - name: Check WordPress database exists
-      ansible.builtin.command: mysql -u{{ wordpress_db_user }} -p{{ wordpress_db_password }} -h{{ wordpress_db_host }} -e "USE {{ wordpress_db_name }};"
-      register: db_exists
-      changed_when: false
-      failed_when: db_exists.rc != 0
-      no_log: true
-      when: not wordpress_use_external_db | default(false)
+    - name: Verify the requested PHP version is active
+      ansible.builtin.assert:
+        that:
+          - "('PHP ' ~ wordpress_php_version ~ '.') in php_version_output.stdout"
+        fail_msg: >-
+          Requested PHP {{ wordpress_php_version }}, but the active runtime is
+          {{ php_version_output.stdout_lines | first | default('unknown') }}
 
-    - name: Verify WordPress core files exist
+    - name: Inspect WordPress core files
       ansible.builtin.stat:
         path: "{{ item }}"
       loop:
-        - /var/www/wordpress/wp-config.php
-        - /var/www/wordpress/wp-settings.php
-        - /var/www/wordpress/wp-load.php
-        - /var/www/wordpress/index.php
-      register: wp_files
+        - "{{ wordpress_install_dir }}/wp-config.php"
+        - "{{ wordpress_install_dir }}/wp-settings.php"
+        - "{{ wordpress_install_dir }}/wp-load.php"
+        - "{{ wordpress_install_dir }}/index.php"
+      register: wordpress_core_files
 
-    - name: Check all WordPress core files are present
+    - name: Verify WordPress core and wp-config permissions
       ansible.builtin.assert:
         that:
-          - item.stat.exists
-        fail_msg: "WordPress core file {{ item.item }} is missing"
-      loop: "{{ wp_files.results }}"
-      loop_control:
-        label: "{{ item.item }}"
+          - wordpress_core_files.results | map(attribute='stat.exists') | min
+          - wordpress_core_files.results[0].stat.mode == '0600'
+        fail_msg: WordPress core is incomplete or wp-config.php is not mode 0600
+
+    - name: Verify the WordPress database is reachable
+      ansible.builtin.command:
+        argv:
+          - mysql
+          - "--user={{ wordpress_db_user }}"
+          - "--password={{ wordpress_db_password }}"
+          - "--host={{ wordpress_db_host }}"
+          - "--execute=USE {{ wordpress_db_name }};"
+      changed_when: false
+      no_log: true
+
+    - name: Request WordPress through the configured virtual host
+      ansible.builtin.uri:
+        url: http://127.0.0.1/
+        headers:
+          Host: "{{ wordpress_server_name }}"
+        status_code: 200
+        return_content: true
+      register: wordpress_http
+
+    - name: Verify WordPress served dynamic content
+      ansible.builtin.assert:
+        that:
+          - wordpress_http.content | length > 0
+        fail_msg: WordPress returned an empty response
+
+    - name: Find PHP files in uploads
+      ansible.builtin.find:
+        paths: "{{ wordpress_install_dir }}/wp-content/uploads"
+        patterns: "*.php"
+        file_type: file
+      register: php_uploads
+
+    - name: Verify uploads contain no PHP files
+      ansible.builtin.assert:
+        that:
+          - php_uploads.matched == 0
+        fail_msg: PHP files are present in the uploads directory

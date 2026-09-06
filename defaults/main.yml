@@ -6,17 +6,30 @@
 # ============================================================================
 wordpress_version: "latest"  # Specify version like "6.4.2" or "latest"
 wordpress_install_dir: "/var/www/wordpress"
+wordpress_wpcli_bin: "/usr/local/bin/wp"
 wordpress_download_url: "https://wordpress.org/wordpress-{{ wordpress_version }}.tar.gz"
-wordpress_site_url: "https://{{ ansible_fqdn }}"
+wordpress_site_url: "https://{{ ansible_facts.fqdn }}"
 wordpress_site_title: "Enterprise WordPress Site"
 
 # WordPress admin user
 # NOTE: For production, override passwords in group_vars or use ansible-vault
-# The /dev/null lookup generates a new password each run (not idempotent).
-# For idempotent passwords, use: lookup('password', 'credentials/admin_password length=32')
+# Generated credentials are written once per host under this directory on the
+# controller and reused on later runs. Without that, every run produced new
+# values while wp-config.php was only written on the first, so the second run
+# rotated the database password out from under the site. Supply the values
+# explicitly from a vault for anything beyond a single-operator setup.
+#
+# No fallback: a shared temporary directory is the wrong home for secrets, and
+# silently putting them there is worse than stopping.
+wordpress_credential_store: >-
+  {{ (lookup('env', 'HOME') | default(undef(), true)
+      | mandatory('HOME is unset on the controller, so there is nowhere private '
+                  ~ 'to keep generated credentials. Set HOME, or set '
+                  ~ 'wordpress_credential_store to a private absolute path.'))
+     ~ '/.ansible/wordpress-credentials/' ~ inventory_hostname }}
 wordpress_admin_user: "wpadmin"
-wordpress_admin_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
-wordpress_admin_email: "admin@{{ ansible_domain | default('example.com') }}"
+wordpress_admin_password: "{{ lookup('password', wordpress_credential_store ~ '/admin_password length=32 chars=ascii_letters,digits') }}"
+wordpress_admin_email: "admin@{{ ansible_facts.domain | default('example.com') }}"
 
 # ============================================================================
 # Database Configuration
@@ -25,14 +38,14 @@ wordpress_db_host: "localhost"
 wordpress_db_port: 3306
 wordpress_db_name: "wordpress"
 wordpress_db_user: "wordpress"
-wordpress_db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+wordpress_db_password: "{{ lookup('password', wordpress_credential_store ~ '/db_password length=32 chars=ascii_letters,digits') }}"
 wordpress_db_charset: "utf8mb4"
 wordpress_db_collate: "utf8mb4_unicode_ci"
 wordpress_db_table_prefix: "wp_"
 
 # Database engine choice: mysql or mariadb
 wordpress_db_engine: "mariadb"
-wordpress_db_root_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+wordpress_db_root_password: "{{ lookup('password', wordpress_credential_store ~ '/db_root_password length=32 chars=ascii_letters,digits') }}"
 
 # ============================================================================
 # Web Server Configuration
@@ -41,10 +54,10 @@ wordpress_db_root_password: "{{ lookup('password', '/dev/null length=32 chars=as
 wordpress_web_server: "nginx"
 wordpress_http_port: 80
 wordpress_https_port: 443
-wordpress_server_name: "{{ ansible_fqdn }}"
+wordpress_server_name: "{{ ansible_facts.fqdn }}"
 
 # PHP-FPM Configuration
-wordpress_php_version: "8.2"  # 7.4, 8.0, 8.1, 8.2, 8.3
+wordpress_php_version: "8.2"  # 7.4, 8.0, 8.1, 8.2, 8.3, 8.4
 wordpress_php_fpm_listen: "/run/php/php{{ wordpress_php_version }}-fpm.sock"
 wordpress_php_fpm_user: "www-data"
 wordpress_php_fpm_group: "www-data"
@@ -60,13 +73,17 @@ wordpress_php_max_input_vars: "5000"
 # ============================================================================
 # SSL/TLS Configuration
 # ============================================================================
-wordpress_enable_ssl: true
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_ssl: false
 wordpress_ssl_certificate: "/etc/ssl/certs/{{ wordpress_server_name }}.crt"
 wordpress_ssl_certificate_key: "/etc/ssl/private/{{ wordpress_server_name }}.key"
+wordpress_nginx_brotli_enabled: false
+
 wordpress_ssl_protocols: "TLSv1.2 TLSv1.3"
-wordpress_ssl_ciphers: >-
-  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:
-  ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+wordpress_ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:\
+  ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
 wordpress_ssl_prefer_server_ciphers: true
 wordpress_ssl_session_timeout: "1d"
 wordpress_ssl_session_cache: "shared:SSL:50m"
@@ -83,14 +100,14 @@ wordpress_letsencrypt_email: "{{ wordpress_admin_email }}"
 # WordPress Security Configuration
 # ============================================================================
 # WordPress salts and keys (auto-generated)
-wordpress_auth_key: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_secure_auth_key: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_logged_in_key: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_nonce_key: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_auth_salt: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_secure_auth_salt: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_logged_in_salt: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
-wordpress_nonce_salt: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_auth_key: "{{ lookup('password', wordpress_credential_store ~ '/auth_key length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_secure_auth_key: "{{ lookup('password', wordpress_credential_store ~ '/secure_auth_key length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_logged_in_key: "{{ lookup('password', wordpress_credential_store ~ '/logged_in_key length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_nonce_key: "{{ lookup('password', wordpress_credential_store ~ '/nonce_key length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_auth_salt: "{{ lookup('password', wordpress_credential_store ~ '/auth_salt length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_secure_auth_salt: "{{ lookup('password', wordpress_credential_store ~ '/secure_auth_salt length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_logged_in_salt: "{{ lookup('password', wordpress_credential_store ~ '/logged_in_salt length=64 chars=ascii_letters,digits,punctuation') }}"
+wordpress_nonce_salt: "{{ lookup('password', wordpress_credential_store ~ '/nonce_salt length=64 chars=ascii_letters,digits,punctuation') }}"
 
 # Security hardening
 wordpress_disable_file_edit: true
@@ -213,7 +230,10 @@ wordpress_php_fpm_pool_path: "/etc/php/{{ wordpress_php_version }}/fpm/pool.d/ww
 # ============================================================================
 # Backup Configuration
 # ============================================================================
-wordpress_enable_backups: true
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_backups: false
 wordpress_backup_dir: "/var/backups/wordpress"
 wordpress_backup_retention_days: 30
 wordpress_backup_schedule_hour: "2"
@@ -261,14 +281,26 @@ wordpress_file_permissions: "0644"
 wordpress_dir_permissions: "0755"
 
 # Service control
-wordpress_enable_security: true
-wordpress_enable_caching: true
-wordpress_enable_monitoring: true
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_security: false
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_caching: false
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_monitoring: false
 
 # ============================================================================
 # Firewall and Security
 # ============================================================================
-wordpress_configure_firewall: true
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_configure_firewall: false
 wordpress_allowed_ips: []
 # Example:
 # wordpress_allowed_ips:
@@ -276,7 +308,10 @@ wordpress_allowed_ips: []
 #   - "10.0.0.1"
 
 # Fail2ban
-wordpress_enable_fail2ban: true
+# Off by default: this feature needs templates the role does not ship
+# (see tests/unit/missing_templates.yml). Turning it on stops the play
+# immediately rather than part way through.
+wordpress_enable_fail2ban: false
 wordpress_fail2ban_maxretry: 5
 wordpress_fail2ban_findtime: "10m"
 wordpress_fail2ban_bantime: "1h"
@@ -315,7 +350,7 @@ wordpress_cloudflare_dns_records: []
 # wordpress_cloudflare_dns_records:
 #   - name: "{{ wordpress_server_name }}"
 #     type: "A"
-#     value: "{{ ansible_default_ipv4.address }}"
+#     value: "{{ ansible_facts.default_ipv4.address }}"
 #     proxied: true
 
 # DigitalOcean specific
@@ -540,7 +575,7 @@ wordpress_smtp_host: "smtp.sendgrid.net"
 wordpress_smtp_port: 587
 wordpress_smtp_user: ""
 wordpress_smtp_password: ""
-wordpress_smtp_from_email: "noreply@{{ ansible_domain | default('example.com') }}"
+wordpress_smtp_from_email: "noreply@{{ ansible_facts.domain | default('example.com') }}"
 wordpress_smtp_from_name: "{{ wordpress_site_title }}"
 wordpress_smtp_encryption: "tls"  # tls, ssl, none
 wordpress_smtp_auth: true
@@ -560,3 +595,68 @@ wordpress_mailgun_api_key: ""
 # Postmark specific
 wordpress_postmark_api_key: ""
 wordpress_postmark_server_token: ""
+
+# ---------------------------------------------------------------------------
+# Security hardening
+#
+# A role only auto-loads defaults/main.yml, so these lived in an orphaned
+# defaults/security.yml and never reached a play.
+# ---------------------------------------------------------------------------
+
+# Main security settings
+wordpress_security_hardening_enabled: true
+wordpress_security_validate: true
+wordpress_security_status_script: true
+wordpress_security_cron: true
+
+# SELinux configuration (RHEL/CentOS)
+wordpress_selinux_enabled: true
+wordpress_selinux_mode: enforcing
+wordpress_selinux_enforce: true
+wordpress_selinux_audit: true
+wordpress_selinux_validate: true
+wordpress_selinux_custom_policy: false
+
+# SELinux booleans
+wordpress_selinux_httpd_can_network_connect: true
+wordpress_selinux_httpd_can_network_connect_db: true
+wordpress_selinux_httpd_execmem: false
+wordpress_selinux_httpd_unified: false
+wordpress_selinux_httpd_builtin_scripting: true
+wordpress_selinux_httpd_enable_cgi: true
+wordpress_selinux_httpd_can_sendmail: true
+wordpress_selinux_httpd_read_user_content: true
+wordpress_selinux_httpd_enable_homedirs: false
+
+# AppArmor configuration (Ubuntu/Debian)
+wordpress_apparmor_enabled: true
+wordpress_apparmor_install: true
+wordpress_apparmor_mode: enforce  # enforce or complain
+wordpress_apparmor_audit: true
+wordpress_apparmor_validate: true
+wordpress_apparmor_notify: true
+wordpress_apparmor_load_profiles: true
+
+# AppArmor profiles
+wordpress_apparmor_php_profile: true
+wordpress_apparmor_nginx_profile: true
+wordpress_apparmor_apache_profile: true
+wordpress_apparmor_wpcli_profile: true
+
+wordpress_secure_uploads: true
+wordpress_install_security_tools: true
+wordpress_fail2ban_enabled: true
+wordpress_auto_security_updates: true
+wordpress_disable_unused_services: true
+wordpress_kernel_hardening: true
+wordpress_password_policy: true
+
+# Logging paths (can be overridden per web server)
+wordpress_access_log_path: "{{
+  '/var/log/nginx/access.log' if wordpress_web_server == 'nginx'
+  else '/var/log/apache2/access.log' if ansible_facts.os_family == 'Debian'
+  else '/var/log/httpd/access_log'
+}}"
+
+# XML-RPC is a common brute-force target and most sites do not use it.
+wordpress_disable_xmlrpc: true

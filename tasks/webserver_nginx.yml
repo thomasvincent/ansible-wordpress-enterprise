@@ -59,36 +59,33 @@
 
 - name: Create Nginx cache directory
   ansible.builtin.file:
-    path: /var/cache/nginx
+    path: "{{ item }}"
     state: directory
-    owner: www-data
-    group: www-data
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
     mode: '0755'
   become: true
+  loop:
+    - /var/cache/nginx
+    - /var/cache/nginx/wordpress
   when: wordpress_enable_nginx_cache | default(true)
-
-- name: Test Nginx configuration
-  ansible.builtin.command:
-    cmd: nginx -t
-  become: true
-  register: nginx_test
-  changed_when: false
-  check_mode: false
 
 - name: Create additional Nginx directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
     mode: '0755'
   loop:
-    - /etc/nginx/conf.d
-    - /var/log/nginx
-    - /var/cache/nginx/fastcgi
-    - /var/cache/nginx/proxy
-    - /var/cache/nginx/scgi
-    - /var/cache/nginx/uwsgi
+    - {path: /etc/nginx/conf.d, owner: root, group: root}
+    - {path: /var/log/nginx, owner: "{{ wordpress_system_user }}", group: "{{ wordpress_system_group }}"}
+    - {path: /var/cache/nginx/fastcgi, owner: "{{ wordpress_system_user }}", group: "{{ wordpress_system_group }}"}
+    - {path: /var/cache/nginx/proxy, owner: "{{ wordpress_system_user }}", group: "{{ wordpress_system_group }}"}
+    - {path: /var/cache/nginx/scgi, owner: "{{ wordpress_system_user }}", group: "{{ wordpress_system_group }}"}
+    - {path: /var/cache/nginx/uwsgi, owner: "{{ wordpress_system_user }}", group: "{{ wordpress_system_group }}"}
+  loop_control:
+    label: "{{ item.path }}"
   become: true
 
 - name: Configure Nginx security settings
@@ -164,10 +161,9 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: www-data
-    group: www-data
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
     mode: '0755'
-    recurse: true
   loop:
     - /var/cache/nginx
     - /var/log/nginx
@@ -195,21 +191,13 @@
   when: wordpress_nginx_status_page | default(false)
   notify: Reload nginx
 
-- name: Set Nginx worker processes based on CPU cores
-  ansible.builtin.lineinfile:
-    path: /etc/nginx/nginx.conf
-    regexp: '^worker_processes'
-    line: "worker_processes {{ ansible_processor_vcpus | default('auto') }};"
+- name: Test Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
   become: true
-  notify: Reload nginx
-
-- name: Optimize Nginx worker connections
-  ansible.builtin.lineinfile:
-    path: /etc/nginx/nginx.conf
-    regexp: '^(\s*)worker_connections'
-    line: "\tworker_connections {{ wordpress_nginx_worker_connections | default('1024') }};"
-  become: true
-  notify: Reload nginx
+  register: nginx_test
+  changed_when: false
+  check_mode: false
 
 - name: Enable and start Nginx service
   ansible.builtin.systemd:

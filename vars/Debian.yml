@@ -44,7 +44,7 @@ wordpress_system_packages:
   - "git"
   - "rsync"
   - "vim"
-  - "software-properties-common"
+  - "python3-apt"
   - "apt-transport-https"
   - "ca-certificates"
   - "gnupg"
@@ -61,8 +61,23 @@ wordpress_db_service:
   mysql: "mysql"
   mariadb: "mariadb"
 
+wordpress_php_fpm_listen: "/run/php/php{{ wordpress_php_version }}-fpm.sock"
+
+wordpress_security_tools:
+  - "fail2ban"
+  - "logwatch"
+  - "rkhunter"
+  - "chkrootkit"
+
+wordpress_db_socket: "/var/run/mysqld/mysqld.sock"
+
+wordpress_db_config_dir:
+  mysql: "/etc/mysql/mysql.conf.d"
+  mariadb: "/etc/mysql/mariadb.conf.d"
+
 wordpress_php_fpm_service: "php{{ wordpress_php_version }}-fpm"
 wordpress_redis_service: "redis-server"
+wordpress_sshd_service: "ssh"
 wordpress_memcached_service: "memcached"
 
 # Paths
@@ -77,7 +92,6 @@ wordpress_apache_sites_available: "{{ wordpress_apache_conf_path }}/sites-availa
 wordpress_apache_sites_enabled: "{{ wordpress_apache_conf_path }}/sites-enabled"
 
 # PHP-FPM socket/listen
-wordpress_php_fpm_listen_debian: "/run/php/php{{ wordpress_php_version }}-fpm.sock"
 
 # Firewall
 wordpress_firewall_service: "ufw"
@@ -89,8 +103,6 @@ wordpress_ondrej_php_repo: "ppa:ondrej/php"
 wordpress_ondrej_nginx_repo: "ppa:ondrej/nginx-mainline"
 
 # System user defaults
-wordpress_php_fpm_user_debian: "www-data"
-wordpress_php_fpm_group_debian: "www-data"
 
 # Apache modules
 wordpress_apache_modules:
