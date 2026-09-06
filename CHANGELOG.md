@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The role now fails closed before package changes unless the managed node is
+  Ubuntu 24.04 LTS or Enterprise Linux 9 (Red Hat, Rocky, or AlmaLinux). Debian,
+  CentOS, EL8, other Ubuntu releases, and unlisted distributions are no longer
+  accepted.
+- PHP 8.3 is now the only supported branch because it is available and tested
+  on every supported platform. PHP 7.4, 8.0, and 8.1 are rejected because
+  upstream security support ended; 8.2 and 8.4 are rejected because Ubuntu
+  24.04 cannot install them from its standard archive.
+- The default PHP branch changes from 8.2 to 8.3. Existing deployments must
+  plan this runtime migration; the role does not remove an older versioned
+  PHP-FPM installation automatically.
+- `ansible-core` is constrained to the maintained 2.21 release line. These
+  platform and runtime removals are breaking changes and require the next major
+  role release. `meta/platform_support.yml` is the authoritative lifecycle
+  policy.
+
 ### Added
 - Comprehensive enterprise-grade WordPress deployment role
 - Multi-cloud provider support (AWS, GCP, Azure, DigitalOcean, Oracle Cloud)

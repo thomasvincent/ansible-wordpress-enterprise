@@ -10,7 +10,7 @@ images:
 | Host | Stack |
 | --- | --- |
 | `ubuntu-24-nginx` | Ubuntu 24.04, PHP 8.3, Nginx |
-| `rocky-9-apache` | Rocky Linux 9, PHP 8.2, Apache |
+| `rocky-9-apache` | Rocky Linux 9, PHP 8.3, Apache |
 
 Ubuntu 22.04 and Debian 13 are compatibility targets. Add either to the stable
 matrix only after it passes the same end-to-end contract without exceptions.

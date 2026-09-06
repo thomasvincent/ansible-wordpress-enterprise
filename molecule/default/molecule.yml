@@ -68,7 +68,7 @@ provisioner:
         wordpress_web_server: nginx
       rocky-9-apache:
         ansible_python_interpreter: /usr/bin/python3
-        wordpress_php_version: "8.2"
+        wordpress_php_version: "8.3"
         wordpress_web_server: apache
   playbooks:
     prepare: prepare.yml

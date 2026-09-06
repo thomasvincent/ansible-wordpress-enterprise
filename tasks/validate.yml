@@ -28,14 +28,6 @@
     success_msg: "Credential store location validation passed"
     quiet: true
 
-- name: Validate operating system compatibility
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family in ['Debian', 'RedHat']
-      - ansible_facts.distribution in ['Ubuntu', 'Debian', 'CentOS', 'RHEL', 'Rocky', 'AlmaLinux']
-    fail_msg: "Unsupported operating system: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
-    success_msg: "Operating system validation passed: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
-
 - name: Validate system architecture
   ansible.builtin.assert:
     that:
@@ -180,15 +172,6 @@
 # ============================================================================
 # PHP Configuration Validation
 # ============================================================================
-
-- name: Validate PHP version
-  ansible.builtin.assert:
-    that:
-      - wordpress_php_version is defined
-      - wordpress_php_version is string
-      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
-    fail_msg: "Invalid or unsupported PHP version: {{ wordpress_php_version | default('undefined') }}"
-    success_msg: "PHP version validation passed"
 
 - name: Validate PHP memory and resource limits
   ansible.builtin.assert:

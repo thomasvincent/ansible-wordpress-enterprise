@@ -1,0 +1,55 @@
+---
+# This role-entry preflight must complete before distribution variables load.
+# It reads the committed policy directly inside the assertions so inventory and
+# extra-vars cannot replace the allowlist. Distribution identity still follows
+# Ansible's normal fact and variable precedence and is controlled by the caller.
+
+- name: Require distribution facts for the release gate
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution is defined
+      - ansible_facts.distribution_version is defined
+      - ansible_facts.distribution_major_version is defined
+    fail_msg: >-
+      Distribution facts are required. Run the role with fact gathering
+      enabled so its current/LTS release policy can fail closed.
+    quiet: true
+
+- name: Reject operating systems outside the tested current/LTS contract
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.distribution in
+        (lookup('ansible.builtin.file', role_path ~ '/meta/platform_support.yml')
+         | from_yaml).runtime_platforms
+      - >-
+        (
+          ansible_facts.distribution_version.split('.')[0:2] | join('.')
+          if ansible_facts.distribution == 'Ubuntu'
+          else ansible_facts.distribution_major_version
+        ) in
+        (lookup('ansible.builtin.file', role_path ~ '/meta/platform_support.yml')
+         | from_yaml).runtime_platforms.get(ansible_facts.distribution, [])
+    fail_msg: >-
+      Unsupported operating system {{ ansible_facts.distribution }}
+      {{ ansible_facts.distribution_version }}. This role fails closed and only
+      supports the current/LTS releases listed in meta/platform_support.yml.
+    quiet: true
+
+- name: Reject unsupported PHP release branches
+  ansible.builtin.assert:
+    that:
+      - wordpress_php_version is defined
+      - wordpress_php_version is string
+      - >-
+        wordpress_php_version in
+        ((lookup('ansible.builtin.file', role_path ~ '/meta/platform_support.yml')
+          | from_yaml).php_versions
+         | selectattr('supported', 'equalto', true)
+         | map(attribute='version')
+         | list)
+    fail_msg: >-
+      Invalid, end-of-life, or unverified PHP version:
+      {{ wordpress_php_version | default('undefined') }}. Choose a supported
+      branch from meta/platform_support.yml.
+    quiet: true

@@ -3,8 +3,8 @@
 [![CI](https://github.com/thomasvincent/ansible-wordpress-enterprise/workflows/CI/badge.svg)](https://github.com/thomasvincent/ansible-wordpress-enterprise/actions)
 [![Ansible Galaxy](https://img.shields.io/badge/ansible--galaxy-wordpress__enterprise-blue.svg)](https://galaxy.ansible.com/thomasvincent/wordpress_enterprise)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Ansible](https://img.shields.io/badge/ansible-%3E%3D2.14-blue)](https://docs.ansible.com/)
-[![Platform](https://img.shields.io/badge/platform-Ubuntu%20%7C%20RHEL%20%7C%20Rocky-lightgrey)](https://github.com/thomasvincent/ansible-wordpress-enterprise)
+[![Ansible](https://img.shields.io/badge/ansible--core-2.21-blue)](https://docs.ansible.com/)
+[![Platform](https://img.shields.io/badge/platform-Ubuntu%2024.04%20LTS%20%7C%20EL9-lightgrey)](https://github.com/thomasvincent/ansible-wordpress-enterprise)
 
 🚀 **Production-ready Ansible role for deploying and managing WordPress at scale** - Enterprise-grade WordPress deployment with support for multiple cloud providers, high availability, advanced security, and comprehensive monitoring.
 
@@ -36,7 +36,8 @@ converge, idempotence, and runtime verification contract on both hosts.
 
 ### Supported distributions
 
-A release is supported only while its vendor still gives it **full** support.
+A release is supported only when it is a current or LTS release, its vendor
+still gives it **full** support, and the complete Molecule contract passes.
 Extended phases do not count: Ubuntu ESM, Debian LTS and Enterprise Linux
 Maintenance Support are all out of scope.
 
@@ -45,9 +46,13 @@ Maintenance Support are all out of scope.
 | Enterprise Linux 9 | 2027-05-31 |
 | Ubuntu 24.04 LTS | 2029-05-31 |
 
-`meta/platform_support.yml` holds the policy and the dates;
+`meta/platform_support.yml` holds the policy, runtime allowlist and dates;
 `tests/unit/test_platform_support.py` fails the build the day a release leaves
 full support, or when `meta/main.yml` and the Molecule matrix drift from it.
+When invoked through the role's standard `tasks/main.yml` entry point, the role
+checks the same allowlist before loading distribution variables, so an unlisted
+release fails before it can change packages or configuration. Direct
+`tasks_from` invocation of internal phases is not a supported public interface.
 
 Ubuntu 22.04 and Debian 13 remain compatibility targets, not supported release
 platforms. They will be promoted only after they pass the same pinned-image,
@@ -90,10 +95,10 @@ advanced-feature sections as topology references until the templates exist.
 - **Apache**: mod_php/PHP-FPM, ModSecurity WAF, HTTP/2
 
 ✅ **PHP Support**
-- PHP versions: 7.4, 8.0, 8.1, 8.2, 8.3, 8.4
+- PHP version: 8.3 (supported upstream and exercised on every CI platform)
 - OPcache optimization
 - PHP-FPM tuning
-- Multiple PHP version support
+- Policy-gated PHP release support
 
 ✅ **Database Engines**
 - MySQL 8.0+
@@ -198,7 +203,7 @@ git clone https://github.com/thomasvincent/ansible-wordpress-enterprise.git
 
         # Web Server & PHP
         wordpress_web_server: "nginx"
-        wordpress_php_version: "8.2"
+        wordpress_php_version: "8.3"
         wordpress_php_memory_limit: "512M"
 
         # Database
@@ -364,7 +369,7 @@ git submodule update --remote roles/wordpress_enterprise
 
         # Use production-like configuration
         wordpress_web_server: "nginx"
-        wordpress_php_version: "8.2"
+        wordpress_php_version: "8.3"
         wordpress_enable_ssl: true
         wordpress_use_letsencrypt: true
 
@@ -543,12 +548,8 @@ wordpress_multisite_sites:
 ```yaml
 ---
 # PHP Version Management
-wordpress_php_version: "8.2"
+wordpress_php_version: "8.3"
 wordpress_php_versions_available:
-  - "7.4"
-  - "8.0"
-  - "8.1"
-  - "8.2"
   - "8.3"
 
 # PHP-FPM Pool Configuration

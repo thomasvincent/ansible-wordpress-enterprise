@@ -28,7 +28,7 @@
     # Infrastructure
     # ========================================================================
     wordpress_web_server: "nginx"
-    wordpress_php_version: "8.2"
+    wordpress_php_version: "8.3"
     wordpress_php_memory_limit: "512M"
 
     # ========================================================================

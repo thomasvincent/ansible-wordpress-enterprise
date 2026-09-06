@@ -28,7 +28,7 @@
     # Infrastructure
     # ========================================================================
     wordpress_web_server: "nginx"
-    wordpress_php_version: "8.2"
+    wordpress_php_version: "8.3"
     wordpress_db_engine: "mariadb"
 
     # Local database
