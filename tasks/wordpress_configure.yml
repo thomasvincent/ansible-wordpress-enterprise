@@ -17,15 +17,54 @@
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
     mode: '0600'
-    backup: true
   become: true
   when: not wordpress_installed.stat.exists
+
+# The template is only written on the first run so later runs cannot clobber
+# what plugins add to wp-config.php. That leaves the database credentials free
+# to drift: tasks/database.yml sets the user from these variables every run.
+# Keep just those three defines in step.
+- name: Keep the database credentials in wp-config.php in step
+  ansible.builtin.lineinfile:
+    path: "{{ wordpress_install_dir }}/wp-config.php"
+    regexp: >-
+      ^define\(\s*'{{ item.define }}'
+    # Update the existing define and nothing else. Without backrefs a regexp
+    # that does not match appends the line to the end of the file, after
+    # wp-settings.php has already run, where a define has no effect.
+    backrefs: true
+    line: >-
+      define( '{{ item.define }}', '{{ item.value | replace('\\', '\\\\') | replace("'", "\\'") }}' );
+    owner: "{{ wordpress_system_user }}"
+    group: "{{ wordpress_system_group }}"
+    mode: '0600'
+  become: true
+  loop:
+    - {define: DB_NAME, value: "{{ wordpress_db_name }}"}
+    - {define: DB_USER, value: "{{ wordpress_db_user }}"}
+    - {define: DB_PASSWORD, value: "{{ wordpress_db_password }}"}
+  loop_control:
+    label: "{{ item.define }}"
+  no_log: true
+  when: wordpress_installed.stat.exists
   notify: Run wp-cli cache flush
+
+# wp-config.php existing only means the file was templated; the core tables
+# may still be absent, and every later wp command fails if they are.
+- name: Check whether WordPress core is installed
+  ansible.builtin.command:
+    cmd: "{{ wordpress_wpcli_bin }} core is-installed --path={{ wordpress_install_dir }}"
+  become: true
+  become_user: "{{ wordpress_system_user }}"
+  register: wp_core_installed
+  changed_when: false
+  failed_when: false
+  when: wordpress_install_wpcli | bool
 
 - name: Install WordPress using WP-CLI (if not already installed)
   ansible.builtin.command:
     cmd: >
-      wp core install
+      {{ wordpress_wpcli_bin }} core install
       --url="{{ wordpress_site_url }}"
       --title="{{ wordpress_site_title }}"
       --admin_user="{{ wordpress_admin_user }}"
@@ -37,7 +76,7 @@
   become_user: "{{ wordpress_system_user }}"
   when:
     - wordpress_install_wpcli | bool
-    - not wordpress_installed.stat.exists
+    - wp_core_installed.rc | default(1) != 0
   register: wp_install_result
   changed_when: "'Success' in wp_install_result.stdout"
 
@@ -51,7 +90,7 @@
 - name: Configure WordPress options via WP-CLI
   ansible.builtin.command:
     cmd: >
-      wp option update {{ item.option }} "{{ item.value }}"
+      {{ wordpress_wpcli_bin }} option update {{ item.option }} "{{ item.value }}"
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -73,8 +112,7 @@
 - name: Configure WordPress permalink structure
   ansible.builtin.command:
     cmd: >
-      wp rewrite structure "/%postname%/"
-      --hard
+      {{ wordpress_wpcli_bin }} rewrite structure "/%postname%/"
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -84,7 +122,7 @@
 - name: Update WordPress timezone
   ansible.builtin.command:
     cmd: >
-      wp option update timezone_string "{{ ansible_date_time.tz }}"
+      {{ wordpress_wpcli_bin }} option update timezone_string "{{ ansible_facts.date_time.tz }}"
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -99,7 +137,7 @@
     - name: Install WordPress multisite
       ansible.builtin.command:
         cmd: >
-          wp core multisite-install
+          {{ wordpress_wpcli_bin }} core multisite-install
           --url="{{ wordpress_site_url }}"
           --title="{{ wordpress_site_title }}"
           --admin_user="{{ wordpress_admin_user }}"
@@ -127,7 +165,7 @@
           define('SITE_ID_CURRENT_SITE', 1);
           define('BLOG_ID_CURRENT_SITE', 1);
         insertbefore: "/* That's all, stop editing!"
-        backup: true
+        mode: '0600'
       become: true
 
 - name: Configure additional WordPress constants
@@ -140,7 +178,7 @@
       define('{{ constant }}', {{ value | to_json }});
       {% endfor %}
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: wordpress_additional_constants | length > 0
 
@@ -153,7 +191,7 @@
     - name: Install Redis object cache plugin
       ansible.builtin.command:
         cmd: >
-          wp plugin install redis-cache
+          {{ wordpress_wpcli_bin }} plugin install redis-cache
           --activate
           --path="{{ wordpress_install_dir }}"
       become: true
@@ -164,7 +202,7 @@
     - name: Enable Redis object cache
       ansible.builtin.command:
         cmd: >
-          wp redis enable
+          {{ wordpress_wpcli_bin }} redis enable
           --path="{{ wordpress_install_dir }}"
       become: true
       become_user: "{{ wordpress_system_user }}"
@@ -185,7 +223,7 @@
           {% endif %}
           define('WP_CACHE_KEY_SALT', '{{ wordpress_server_name }}');
         insertbefore: "/* That's all, stop editing!"
-        backup: true
+        mode: '0600'
       become: true
 
 - name: Configure WordPress CDN settings
@@ -197,7 +235,7 @@
       define('WP_CDN_DOMAIN', '{{ wordpress_cdn_url }}');
       define('WP_CDN_HTTPS', {{ 'true' if wordpress_cdn_ssl_enabled else 'false' }});
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when:
     - wordpress_enable_cdn | bool
@@ -219,7 +257,7 @@
       define('WPMS_SMTP_FROM', '{{ wordpress_smtp_from_email }}');
       define('WPMS_SMTP_FROMNAME', '{{ wordpress_smtp_from_name }}');
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: wordpress_smtp_enabled | bool
 
@@ -232,7 +270,7 @@
       define('WP_AUTO_UPDATE_CORE', true);
       define('AUTOMATIC_UPDATER_DISABLED', false);
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
   when: not wordpress_debug | bool
 
@@ -245,13 +283,15 @@
       define('DISALLOW_FILE_EDIT', {{ 'true' if wordpress_disable_file_edit else 'false' }});
       define('DISALLOW_FILE_MODS', {{ 'true' if wordpress_disable_file_mods else 'false' }});
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
 
 - name: Create advanced-cache.php for caching plugins
   ansible.builtin.file:
     path: "{{ wordpress_install_dir }}/wp-content/advanced-cache.php"
     state: touch
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ wordpress_system_user }}"
     group: "{{ wordpress_system_group }}"
     mode: '0644'
@@ -284,13 +324,13 @@
       define('WP_DEBUG_LOG_FILE', '{{ wordpress_error_log }}');
       {% endif %}
     insertbefore: "/* That's all, stop editing!"
-    backup: true
+    mode: '0600'
   become: true
 
 - name: Install and activate essential plugins
   ansible.builtin.command:
     cmd: >
-      wp plugin install {{ item.name }}
+      {{ wordpress_wpcli_bin }} plugin install {{ item.name }}
       {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
       {% if item.state == 'present' %}--activate{% endif %}
       --path="{{ wordpress_install_dir }}"
@@ -306,7 +346,7 @@
 - name: Install and activate themes
   ansible.builtin.command:
     cmd: >
-      wp theme install {{ item.name }}
+      {{ wordpress_wpcli_bin }} theme install {{ item.name }}
       {% if item.version is defined and item.version != 'latest' %}--version={{ item.version }}{% endif %}
       {% if item.activate | default(false) %}--activate{% endif %}
       --path="{{ wordpress_install_dir }}"
@@ -322,7 +362,7 @@
 - name: Flush WordPress rewrite rules
   ansible.builtin.command:
     cmd: >
-      wp rewrite flush
+      {{ wordpress_wpcli_bin }} rewrite flush
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -332,7 +372,7 @@
 - name: Update WordPress database (if needed)
   ansible.builtin.command:
     cmd: >
-      wp core update-db
+      {{ wordpress_wpcli_bin }} core update-db
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"
@@ -342,7 +382,7 @@
 - name: Verify WordPress installation
   ansible.builtin.command:
     cmd: >
-      wp core verify-checksums
+      {{ wordpress_wpcli_bin }} core verify-checksums
       --path="{{ wordpress_install_dir }}"
   become: true
   become_user: "{{ wordpress_system_user }}"

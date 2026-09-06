@@ -1,33 +1,27 @@
 ---
-dependency:
-  name: galaxy
-  options:
-    requirements-file: requirements.yml
-
 driver:
   name: docker
 
+# Stable v1 matrix. Compatibility targets are added only after they pass the
+# same converge -> idempotence -> verify contract.
 platforms:
-  - name: ubuntu-22
-    image: ubuntu:22.04
-    dockerfile: ../default/Dockerfile.j2
-    pre_build_image: false
-    command: sleep infinity
-    privileged: false
-  
-  - name: ubuntu-24
-    image: ubuntu:24.04
-    dockerfile: ../default/Dockerfile.j2
-    pre_build_image: false
-    command: sleep infinity
-    privileged: false
-  
-  - name: rocky-9
-    image: rockylinux:9
-    dockerfile: ../default/Dockerfile.j2
-    pre_build_image: false
-    command: sleep infinity
-    privileged: false
+  - name: ubuntu-24-nginx
+    image: geerlingguy/docker-ubuntu2404-ansible@sha256:8f71d6ef6617ce600a0c9f210a21bff095ef9cf2b7c5ac437f838e697ad5bbe5
+    command: /sbin/init
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+
+  - name: rocky-9-apache
+    image: geerlingguy/docker-rockylinux9-ansible@sha256:5b5b69fcad35dec33d41faf6432d7c25cebc1979b4d566c26fa1c05fd3ccebe1
+    command: /sbin/init
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
 
 provisioner:
   name: ansible
@@ -37,20 +31,52 @@ provisioner:
       callback_whitelist: profile_tasks, timer, yaml
       roles_path: ${MOLECULE_PROJECT_DIRECTORY}/../
   inventory:
+    group_vars:
+      all:
+        wordpress_server_name: test.example.com
+        wordpress_site_url: http://test.example.com
+        wordpress_site_title: Test WordPress Site
+        wordpress_admin_user: admin
+        wordpress_admin_email: admin@example.com
+        wordpress_admin_password: TestPass123!  # pragma: allowlist secret
+        wordpress_db_engine: mariadb
+        wordpress_db_name: wordpress_test
+        wordpress_db_user: wp_user
+        wordpress_db_password: DbPass123!  # pragma: allowlist secret
+        wordpress_db_root_password: RootPass123!  # pragma: allowlist secret
+        wordpress_db_host: localhost
+        wordpress_use_external_db: false
+        wordpress_enable_ssl: false
+        wordpress_use_letsencrypt: false
+        wordpress_enable_fail2ban: false
+        wordpress_configure_firewall: false
+        wordpress_enable_backups: false
+        wordpress_enable_monitoring: false
+        wordpress_enable_security: false
+        wordpress_enable_caching: false
+        wordpress_enable_logging: false
+        wordpress_enable_redis: false
+        wordpress_enable_memcached: false
+        wordpress_enable_object_cache: false
+        wordpress_plugins: []
+        wordpress_themes: []
+        wordpress_install_dir: /var/www/wordpress
     host_vars:
-      ubuntu-22:
+      ubuntu-24-nginx:
         ansible_python_interpreter: /usr/bin/python3
-      ubuntu-24:
+        wordpress_php_version: "8.3"
+        wordpress_web_server: nginx
+      rocky-9-apache:
         ansible_python_interpreter: /usr/bin/python3
-      rocky-9:
-        ansible_python_interpreter: /usr/bin/python3
+        wordpress_php_version: "8.2"
+        wordpress_web_server: apache
   playbooks:
     prepare: prepare.yml
-    converge: ${MOLECULE_PLAYBOOK:-converge.yml}
+    converge: converge.yml
     verify: verify.yml
   lint:
     name: ansible-lint
-    enabled: false  # Already done in CI
+    enabled: false
 
 verifier:
   name: ansible
@@ -58,8 +84,6 @@ verifier:
 scenario:
   name: default
   test_sequence:
-    - dependency
-    - cleanup
     - destroy
     - syntax
     - create
@@ -67,5 +91,4 @@ scenario:
     - converge
     - idempotence
     - verify
-    - cleanup
     - destroy

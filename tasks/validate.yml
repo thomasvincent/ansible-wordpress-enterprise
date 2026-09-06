@@ -6,36 +6,60 @@
 # Basic System Validation
 # ============================================================================
 
+# Generated credentials land here on the controller. A relative path, or one
+# under a world-writable directory, would leave them readable by other users.
+- name: Validate the credential store is a private absolute path
+  ansible.builtin.assert:
+    that:
+      - wordpress_credential_store is string
+      - wordpress_credential_store | length > 0
+      - wordpress_credential_store.startswith('/')
+      - not wordpress_credential_store.startswith('/tmp/')
+      - not wordpress_credential_store.startswith('/var/tmp/')
+      - not wordpress_credential_store.startswith('/dev/shm/')
+      # An unset HOME would leave the store directly under the filesystem root.
+      - not wordpress_credential_store.startswith('/.ansible/')
+      - wordpress_credential_store.split('/') | select() | list | length > 2
+    fail_msg: >-
+      wordpress_credential_store must be an absolute path outside the shared
+      temporary directories; got
+      "{{ wordpress_credential_store | default('<unset>') }}". Set HOME on the
+      controller, or set wordpress_credential_store explicitly.
+    success_msg: "Credential store location validation passed"
+    quiet: true
+
 - name: Validate operating system compatibility
   ansible.builtin.assert:
     that:
-      - ansible_os_family in ['Debian', 'RedHat']
-      - ansible_distribution in ['Ubuntu', 'Debian', 'CentOS', 'RHEL', 'Rocky', 'AlmaLinux']
-    fail_msg: "Unsupported operating system: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-    success_msg: "Operating system validation passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      - ansible_facts.os_family in ['Debian', 'RedHat']
+      - ansible_facts.distribution in ['Ubuntu', 'Debian', 'CentOS', 'RHEL', 'Rocky', 'AlmaLinux']
+    fail_msg: "Unsupported operating system: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+    success_msg: "Operating system validation passed: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
 
 - name: Validate system architecture
   ansible.builtin.assert:
     that:
-      - ansible_architecture in ['x86_64', 'aarch64', 'armv7l']
-    fail_msg: "Unsupported architecture: {{ ansible_architecture }}"
-    success_msg: "Architecture validation passed: {{ ansible_architecture }}"
+      - ansible_facts.architecture in ['x86_64', 'aarch64', 'armv7l']
+    fail_msg: "Unsupported architecture: {{ ansible_facts.architecture }}"
+    success_msg: "Architecture validation passed: {{ ansible_facts.architecture }}"
 
 - name: Check minimum system requirements
   ansible.builtin.assert:
     that:
-      - ansible_memtotal_mb >= 512
-      - ansible_processor_vcpus >= 1
+      - ansible_facts.memtotal_mb >= 512
+      - ansible_facts.processor_vcpus >= 1
     fail_msg: "System does not meet minimum requirements (512MB RAM, 1 CPU core)"
     success_msg: "System requirements check passed"
 
 - name: Validate disk space requirements
   ansible.builtin.assert:
     that:
-      - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 2147483648  # 2GB
+      - ansible_facts.mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 2147483648 # 2GB
     fail_msg: "Insufficient disk space. At least 2GB free space required on root filesystem"
     success_msg: "Disk space validation passed"
-  when: ansible_mounts is defined
+  when:
+    - ansible_facts.mounts is defined
+    - ansible_facts.mounts | selectattr('mount', 'equalto', '/') | list | length > 0
 
 # ============================================================================
 # WordPress Configuration Validation
@@ -162,7 +186,7 @@
     that:
       - wordpress_php_version is defined
       - wordpress_php_version is string
-      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3']
+      - wordpress_php_version in ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
     fail_msg: "Invalid or unsupported PHP version: {{ wordpress_php_version | default('undefined') }}"
     success_msg: "PHP version validation passed"
 
@@ -170,12 +194,10 @@
   ansible.builtin.assert:
     that:
       - wordpress_php_memory_limit is match('^[0-9]+[MG]$')
-      - wordpress_php_max_execution_time is number
-      - wordpress_php_max_execution_time >= 30
+      - wordpress_php_max_execution_time | int >= 30
       - wordpress_php_upload_max_filesize is match('^[0-9]+[MG]$')
       - wordpress_php_post_max_size is match('^[0-9]+[MG]$')
-      - wordpress_php_max_input_vars is number
-      - wordpress_php_max_input_vars >= 1000
+      - wordpress_php_max_input_vars | int >= 1000
     fail_msg: "Invalid PHP configuration parameters"
     success_msg: "PHP configuration validation passed"
 
@@ -367,8 +389,8 @@
   ansible.builtin.debug:
     msg:
       - "=== WordPress Enterprise Role Validation Complete ==="
-      - "✅ Operating System: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-      - "✅ Architecture: {{ ansible_architecture }}"
+      - "✅ Operating System: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+      - "✅ Architecture: {{ ansible_facts.architecture }}"
       - "✅ WordPress Version: {{ wordpress_version }}"
       - "✅ PHP Version: {{ wordpress_php_version }}"
       - "✅ Web Server: {{ wordpress_web_server }}"
