@@ -11,6 +11,7 @@ molecule>=26.8.0
 molecule-plugins[docker]>=26.7.15
 pytest>=9.1.1
 pytest-testinfra>=10.2.2
+PyYAML>=6.0.3
 
 # Ansible collections (installed via ansible-galaxy, listed for reference)
 # ansible-galaxy collection install community.general

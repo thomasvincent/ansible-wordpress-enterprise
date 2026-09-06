@@ -189,11 +189,8 @@ ansible-lint
 # Run all tests
 make test
 
-# Test specific scenario
-molecule test -s ubuntu-nginx
-
-# Test on specific distro
-MOLECULE_DISTRO=ubuntu2204 molecule test
+# Run the stable Ubuntu 24/Nginx and Rocky 9/Apache contract
+mise exec python@3.12 -- molecule test --scenario-name default
 ```
 
 ### Docker Tests
